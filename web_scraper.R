@@ -129,35 +129,70 @@ df_sessions <- map(legislaturas_id_list,grab_session_info) %>% reduce(full_join)
 
 # Grab all boletin numbers - in a given session ---------------------------
 
+# From the transcript of each session (boletin de sesion) we will grab the numbers of each boletin (of laws) that were discussed in the session
+grab_boletin_nums_session <- function(session_id){
 
-# Specify the session
-session_id <- '2775'
-boletin_session_url <- str_c(landing,'/wscamaradiputados.asmx/getSesionBoletinXML?prmSesionID=',session_id)
+  # Specify the session
+  session_id <- session_id %>% as.character()
+  boletin_session_url <- str_c(landing,'/wscamaradiputados.asmx/getSesionBoletinXML?prmSesionID=',session_id)
+  
+  # Open the boletin of the session
+  remDr2$navigate(boletin_session_url)
+  
+  Sys.sleep(15)
+  
+  # Grab the text from the boletin
+  url <- remDr2$getPageSource()[[1]]
+  boletin_session_xml <- read_xml(url)
+  
+  boletin_session_text <- boletin_session_xml %>% 
+    xml_contents() %>% 
+    as.character()
+  
+  # Account for parsing error - from the website
+  check_first_line <- boletin_session_text[[1]]
+  check_first_line_text <- check_first_line %>% str_extract('.{17}')
+  
+  # Condition -- parsing error
+  if (check_first_line_text=="XML Parsing Error"){
+    print(str_c('session_id number ',session_id,' does not have a session boletin website'))
+  }
+  else{
+    # Grab all discussed boletin in the session
+    boletin_text_withunknown <- boletin_session_text %>% 
+      str_extract_all('\\d*-\\d.*\\.') %>% 
+      str_extract_all('(\\d*-\\d*|\\(\\d*-\\d*\\))') # I don't know what the (410-359),(22-360) terms are?
+    
+    boletin_list_withunknown <- tibble(boletin_num = boletin_text_withunknown[[1]])
+    
+    # Keep only observations known to be a boletin_num
+    boletin_list <- boletin_list_withunknown %>%
+      mutate(session_id = session_id) %>% 
+      filter(!grepl('\\(.*',boletin_num)) %>% 
+      filter(!grepl('^-', boletin_num)) %>% 
+      mutate(len = str_count(boletin_num)) %>% 
+      filter(len<mean(len,na.rm = TRUE)+1)
+    
+    boletin_list
+  }
+  
+}
 
-# Open the boletin of the session
-remDr2$navigate(boletin_session_url)
+# Grab all sessions with data (Sessions have data starting in legislatura_id==26 , which is in 2000)
+session_id_list <- df_sessions %>% 
+  filter(legislatura_id>=26) %>% 
+  select(session_id)
 
-# Grab the text from the boletin
-url <- remDr2$getPageSource()[[1]]
-boletin_session_xml <- read_xml(url)
+session_id_list_vec <- session_id_list$session_id
 
-boletin_session_text <- boletin_session_xml %>% 
-  xml_contents() %>% 
-  as.character()
+# Let's apply the function
+df_boletin_nums <- map(session_id_list_vec,grab_boletin_nums_session)
+  
+# Filter out non-tibble results - and make a full_join
+df_boletin_nums <- df_boletin_nums[lapply(df_boletin_nums, length) > 1] %>% 
+  reduce(full_join)
 
-
-boletin_session_text
-
-# Grab all discussed boletin in the session
-check <- boletin_session_text %>% 
-  str_extract_all('\\d*-\\d.*\\.') %>% 
-  str_extract_all('(\\d*-\\d*|\\(\\d*-\\d*\\))')
-
-check
-
-
-
-
+df_boletin_nums
 
 
 
