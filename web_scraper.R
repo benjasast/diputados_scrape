@@ -2,12 +2,13 @@ library(RSelenium)
 library(wdman)
 library(rvest)
 library(tidyverse)
+library(magrittr)
 
 rm(list=ls())
 
 
 # Open docker -------------------------------------------------------------
-remDr <- rsDriver(port = 44450L,
+remDr <- rsDriver(port = 44440L,
                   browser = "firefox")
 
 remDr2 <- remDr[["client"]]
@@ -21,7 +22,6 @@ remDr2$setWindowSize(1280L, 1024L)
 # Open landing website
 landing <- 'http://opendata.congreso.cl/'
 remDr2$navigate(landing)
-
 
 
 # Useful functions --------------------------------------------------------
@@ -201,25 +201,113 @@ df_boletin_nums
 
 
 
+# Grab Legislaturas from dropdown -----------------------------------------
+
 # Grab information from sesiones
 sesiones_landing <- 'https://www.camara.cl/legislacion/sesiones_sala/sesiones_sala.aspx'
+remDr2$navigate(sesiones_landing)
+
+# Grab all legislaturas in the dropdown menu
+legislaturas_website_list <- xml2::read_html(remDr2$getPageSource()[[1]]) %>% 
+  rvest::html_nodes("#ContentPlaceHolder1_ContentPlaceHolder1_ddlLegislatura") %>%
+  rvest::html_text() %>%
+  dplyr::tibble(legislatura_name = .)
+
+legislaturas_webiste_numbers <- legislaturas_website_list %$% 
+  str_extract_all(legislatura_name,'\\d\\d\\d')
+
+legislaturas_website_list <- tibble(numbers = legislaturas_webiste_numbers %>% unlist) %>% 
+  mutate(legislatura_text = str_c('Legislatura',' ',numbers),
+         row = row_number(),
+         css_path = str_c('#ContentPlaceHolder1_ContentPlaceHolder1_ddlLegislatura > option:nth-child(',row,')')) 
+
+
+# Click legislatura dropdown
+
+# Function to go to click a certain legislatura
+click_website_legislatura <- function(legislatura_css_path){
+  click_xpath('//*[@id="ContentPlaceHolder1_ContentPlaceHolder1_ddlLegislatura"]')
+  element <- remDr2$findElement(using = 'css selector', legislatura_css_path)
+  element$clickElement()  
+}
 
 
 
+# Grab sesiones from dropdown ---------------------------------------------
 
 
+# Grab all legislaturas in the dropdown menu
+sessions_website_list <- xml2::read_html(remDr2$getPageSource()[[1]]) %>% 
+  rvest::html_nodes("#ContentPlaceHolder1_ContentPlaceHolder1_ddlSesion") %>%
+  rvest::html_text() %>%
+  dplyr::tibble(sessions_name = . )
+
+sessions_webiste_numbers <- sessions_website_list %$% 
+  str_extract_all(sessions_name,'\\d\\d\\d')
+
+legislaturas_website_list <- tibble(session_number = sessions_webiste_numbers %>% unlist) %>% 
+         mutate(row = row_number(),
+         css_path = str_c('#ContentPlaceHolder1_ContentPlaceHolder1_ddlSesion > option:nth-child(',row,')')) 
 
 
+# Click session dropdown
+
+# Function to go to click a certain legislatura
+click_website_session <- function(session_css_path){
+  click_xpath('//*[@id="ContentPlaceHolder1_ContentPlaceHolder1_ddlSesion"]')
+  element <- remDr2$findElement(using = 'css selector', session_css_path)
+  element$clickElement()  
+}
+
+# Try
+#click_website_session(legislaturas_website_list$css_path[[2]])
 
 
+# Grab information from tabla for each legislatura-session combo ---------
+
+# Basic info (session and date)
+basic_info <- xml2::read_html(remDr2$getPageSource()[[1]]) %>% 
+  rvest::html_nodes("#descripcion") %>%
+  rvest::html_text()
 
 
+# How many 'Proyectos' to scrape?
+n_proyectos <- xml2::read_html(remDr2$getPageSource()[[1]]) %>% 
+  rvest::html_nodes("div.box-proyecto") %>% 
+  html_children() %>% 
+  length()
 
+# Click on each Votaciones tab
+votaciones_tab_xpath <- tibble(n = 1:n_proyectos) %>% 
+  mutate(votaciones_tab_xpath =   str_c('/html/body/div[1]/form/div[3]/section/div[2]/article/div[3]/div[', n ,']/div/div/ul/li[5]/a/span') )
 
+# Click for all of them
+click_votaciones_tab <- function(votacion_tab_xpath){
+  click_xpath(votacion_tab_xpath)
+  webElem <- remDr2$findElement(using = 'xpath', value = xpath )
+  }
 
+map(votaciones_tab_xpath$votaciones_tab_xpath,click_votaciones_tab)
 
+# Grab information for each proyecto --------------------------------------
 
+# Scrape information from each proyecto
+proyecto <- xml2::read_html(remDr2$getPageSource()[[1]]) %>% 
+  html_nodes("div.box-proyecto:nth-child(1)")
 
+# Tipo de proyecto y boletin aca
+strong_elements <- proyecto %>% 
+  html_nodes("strong") %>% 
+  html_text()
 
+proyecto_tipo <- strong_elements[[1]]
+proyecto_boletin <- strong_elements[[1]]
 
+proyecto_materia <- proyecto %>% 
+  html_node("h2") %>% 
+  html_text()
+
+proyecto_extrainfo <- proyecto %>% 
+  html_node("#tab1-1 > p:nth-child(3)") %>% 
+  html_text()
 
