@@ -197,6 +197,23 @@ df_boletin_nums
 
 
 
+# (option 2) Grab all boleting numbers in a given session and vote IDs ---------------------------------------
+
+
+
+# Grab information from sesiones
+sesiones_landing <- 'https://www.camara.cl/legislacion/sesiones_sala/sesiones_sala.aspx'
+
+
+
+
+
+
+
+
+
+
+
 
 
 
