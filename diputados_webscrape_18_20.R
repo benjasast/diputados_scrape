@@ -1,5 +1,5 @@
 #######################################
-# Program: diputados_webscrape_18_20
+# Program: diputados_webscrape
 # Author: Benjamin Sas Trakinsky
 # Date: 03/10/20
 ######################################
@@ -13,15 +13,20 @@ library(RSelenium)
 library(xml2)
 library(furrr)
 
+rm(list=ls())
+
 # Custom functions
 source('function_grab_voting_details_and_info.R')
 
 # Parameters --------------------------------------------------------------
 
-#vote_id_start <- 28235
+# 2002-2018
+vote_id_start <- 1200
+vote_id_end <- 35999
 
-vote_id_start <- 28930
-vote_id_end <- 36000
+# # 2018-2020
+# vote_id_start <- 28235
+# vote_id_end <- 36000
 
 # Create tibble of data to store ------------------------------------------
 vote_data <- tibble(vote_id = seq(vote_id_start,vote_id_end))
@@ -34,9 +39,22 @@ grab_voting_details_and_info_V <- Vectorize(grab_voting_details_and_info)
 # Apply function in parallel
 plan(multisession, workers = 4)
 
+# Get results
 vote_info <- future_map(vote_data$vote_id,grab_voting_details_and_info, .progress = TRUE)
 
+# Remove all the nulls
+vote_info_wo_nulls <- purrr::compact(vote_info)
 
-grab_voting_details_and_info(28943) # Is trouble
+# Save data ---------------------------------------------------------------
+saveRDS(vote_info_wo_nulls,'./scraped_data/vote_info_18_20.rds')
+
+
+
+
+
+
+
+
+
 
 

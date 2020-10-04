@@ -105,43 +105,15 @@ grab_voting_details_and_info <- function(vote_id){
       group_by(variable) %>% 
       nest()
     
-    # Aux function for map()
-    grab_vote_info_variable_for_details <- function(data_df){
-      grab_vote_info_variable(data_df,text_option = FALSE)
-    }
-    
     vote_detalle_ready <- vote_detalle_nested %>% 
-      mutate(value = map(data,grab_vote_info_variable_for_details))
-    
-    # Parse voting look for the ID of each congressman present, grab its ID
-    # and voting action.
-    
-    # Voting information
-    voting_to_parse <- vote_detalle_ready$value[[1]]
-    
-    # Parse voting information
-    tibble(list_index = 1:length(voting_to_parse))
-    
-    
-    parse_vote_detail <- function(index){
-      
-      
-    }
-    
-      diputado_id <-  xml_child(voting_to_parse,1) %>% 
-               xml_child(1) %>% 
-               xml_contents() %>% 
-               xml_text()
-    
-    xml_child(voting_to_parse,3) %>% 
-      xml_children()
+      mutate(value = map(data,grab_vote_info_variable))
     
     df_vote_details <- tibble(
       diputado_id = vote_detalle_ready$value[[1]] %>% 
         str_extract_all(("\\d+")) %>% 
         unlist(),
       vote = vote_detalle_ready$value[[1]] %>% 
-        str_extract_all(("AFIRMATIVO|ABSTENCION|NEGATIVO|EN CONTRA")) %>% 
+        str_extract_all(("[A-Z]+$")) %>% 
         unlist() )
     
     df_vote_details_format <- df_vote_details %>% 
