@@ -10,7 +10,6 @@ grab_political_affiliation <- function(dip_id){
   vote_detalle_base_url_1 <- 'https://www.camara.cl/diputados/detalle/ficha_parlamentaria.aspx?prmId='
   vote_detalle_base_url_2 <- '#ficha-diputados'
   
-  
 
   # Visit website -----------------------------------------------------------
   url <- str_c(vote_detalle_base_url_1,dip_id,vote_detalle_base_url_2)
@@ -54,7 +53,8 @@ grab_political_affiliation <- function(dip_id){
   
   # Output ------------------------------------------------------------------
   
-  info_extracted
+  output <- info_extracted %>% 
+    mutate(DIPID = dip_id)
 
 }
 

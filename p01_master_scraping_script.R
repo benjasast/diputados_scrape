@@ -67,27 +67,51 @@ saveRDS(diputados_personal_info,'./scraped_data/diputados_personal_info.rds')
 # Attach Political parties ------------------------------------------------
 source('function_grab_political_affiliation.R')
 
-# Vectorize the function
-grab_political_affiliation_V <- Vectorize(grab_political_affiliation)
-
 # List with unique diputados_id
 list_dip_ids <- diputados_personal_info %>% 
   reduce(full_join) %>% 
   select(DIPID) %>% 
   mutate(DIPID = DIPID %>% as.double()) %>% 
-  distinct()
+  distinct() %>% 
+  as_tibble()
 
 # Grab information
-political_affiliation <- list_dip_ids %>% 
-  mutate(try = grab_political_affiliation_V(DIPID))
+political_affiliation <- map(list_dip_ids$DIPID,grab_political_affiliation)
+
+# Put results together
+political_affiliation_all <- political_affiliation %>% 
+  reduce(full_join)
+
+# Save results
+saveRDS(political_affiliation_all,'./scraped_data/political_affiliation.rds')
 
 
 
+# Grab legilslative periods -----------------------------------------------
+
+url_periods <- 'http://opendata.congreso.cl/wscamaradiputados.asmx/getPeriodosLegislativos'
+
+webpage_periods <- XML::xmlParse(url_periods)
+legislative_periods_raw <- XML::xmlToDataFrame(webpage_periods)
+
+legislative_periods_raw$ID
+
+legislative_periods_clean <- legislative_periods_raw %>% 
+  transmute(legislative_period_id = ID,
+  date_start = date(Fecha_Inicio),
+  date_end = date(Fecha_Termino),
+  legislative_name = Nombre) %>% 
+  arrange(legislative_period_id) %>% 
+  as_tibble() %>% 
+  mutate_at(vars(legislative_period_id,legislative_name), ~as.character(.))
 
 
+# Add current legislative period
+legislative_periods_clean2<- legislative_periods_clean %>% 
+  rbind(c(9,"2018-03-11",'2020-12-31',"2018-2020"))
 
-
-
+# Save legislative periods
+saveRDS(legislative_periods_clean2,'./scraped_data/table_legislative_periods_info.rds')
 
 
 

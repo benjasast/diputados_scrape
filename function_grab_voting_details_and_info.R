@@ -13,7 +13,6 @@ grab_voting_details_and_info <- function(vote_id){
   
   url <- str_c(vote_detalle_base_url,vote_id)
   webpage <- read_xml(url)
-  
 
   # Check if website is empty or not ----------------------------------------
   
@@ -25,9 +24,19 @@ grab_voting_details_and_info <- function(vote_id){
     print(str_c('vote_id ',vote_id, ' is invalid'))
   }
   
+  if (length_website_attr>0 & length_website_attr!=16){
+    
+    output <- tibble(vote_id = vote_id,
+                     n_attributes = length_website_attr)
+    
+    write_csv(output,'special_vote_id.csv',append = TRUE)
+    print(str_c('vote_id ',vote_id, ' is special'))
+
+  }
   
+
   # Continue only if website is not-empty
-  if (length_website_attr>0){
+  if (length_website_attr==16){
     
     # Variables to scrape: voting info -----------------------------------------------------
     

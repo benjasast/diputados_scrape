@@ -22,7 +22,7 @@ source('function_grab_voting_details_and_info.R')
 
 # 2002-2018
 vote_id_start <- 1200
-vote_id_end <- 35999
+vote_id_end <- 28234
 
 # # 2018-2020
 # vote_id_start <- 28235
@@ -31,22 +31,29 @@ vote_id_end <- 35999
 # Create tibble of data to store ------------------------------------------
 vote_data <- tibble(vote_id = seq(vote_id_start,vote_id_end))
 
-# Vectorize function to obtain information
-grab_voting_details_and_info_V <- Vectorize(grab_voting_details_and_info)
+# Exclude very strange anomalies (data not well inputed from website)
+anomalies <- c(10264)
+
+vote_data <- vote_data %>% 
+  filter(!vote_id %in% anomalies)
+
 
 # Apply function to grab information ----------------------------------------------------------
 
 # Apply function in parallel
-plan(multisession, workers = 4)
+plan(multisession)
 
 # Get results
 vote_info <- future_map(vote_data$vote_id,grab_voting_details_and_info, .progress = TRUE)
+
+# Error (vote_id 1553)
+# Error in xml_children(x)[[search]] : subscript out of bounds
 
 # Remove all the nulls
 vote_info_wo_nulls <- purrr::compact(vote_info)
 
 # Save data ---------------------------------------------------------------
-saveRDS(vote_info_wo_nulls,'./scraped_data/vote_info_18_20.rds')
+saveRDS(vote_info_wo_nulls,'./scraped_data/vote_info_02_18.rds')
 
 
 

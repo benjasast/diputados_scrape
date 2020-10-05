@@ -1,0 +1,11 @@
+coalition1,coalition2,pair_coalition,pair_coalition_gen
+Independientes,Frente Amplio,Independent-Non_Independent,Independent present
+Independientes,Coalición por el Cambio,Independent-Non_Independent,Independent present
+Independientes,Ex-Nueva Mayoria,Independent-Non_Independent,Independent present
+Frente Amplio,Coalición por el Cambio,Alianza-FA,Cross coalition
+Frente Amplio,Ex-Nueva Mayoria,Concertacion-FA,Cross coalition
+Coalición por el Cambio,Ex-Nueva Mayoria,Alianza-Concertacion,Cross coalition
+Coalición por el Cambio,Coalición por el Cambio,Alianza-Alianza,Same coalition
+Ex-Nueva Mayoria,Ex-Nueva Mayoria,Concertacion-Concertacion,Same coalition
+Frente Amplio,Frente Amplio,FA-FA,Same coalition
+Independientes,Independientes,Independent-Independent,Independent present
