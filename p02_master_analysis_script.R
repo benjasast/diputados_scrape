@@ -114,6 +114,10 @@ p9_votes_rel <- p9_votes %>%
 p9_votacion_detalle <- votatacion_detalle_long %>% 
   inner_join(p9_votes_rel)
 
+p9_votacion_detalle %>% 
+  count(vote)
+
+
 # Split data by years
 p9_votacion_detalle_by_year <- p9_votacion_detalle %>% 
   split(p9_votacion_detalle$year)

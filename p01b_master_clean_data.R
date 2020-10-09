@@ -111,7 +111,7 @@ political_affiliation_raw <- political_affiliation %>%
 no_party <-  political_affiliation_raw %>% 
   filter(str_length(party)==0)
 
-no_party[81:91,]
+no_party[171:180,]
 
 political_affiliation_raw %>% 
   count(party) %>% 
@@ -200,17 +200,99 @@ party_input <- tribble(
   151, "Unión Demócrata Independiente",
   164, "Independientes",
   166, "Independientes",
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+  173, "Partido Radical de Chile",
+  185, "Partido Demócrata Cristiano",
+  202, "Partido Demócrata Cristiano",
+  209, "Independientes",
+  226, "Partido Demócrata Cristiano",
+  234, "Unión Demócrata Independiente",
+  242, "Renovación Nacional",
+  800, "Partido Por la Democracia",
+  808, "Partido Demócrata Cristiano",
+  812, "Unión Demócrata Independiente",
+  813, "Renovación Nacional",
+  816, "Partido Demócrata Cristiano",
+  823, "Unión Demócrata Independiente",
+  830, "Unión Demócrata Independiente",
+  840, "Unión Demócrata Independiente",
+  857, "Unión Demócrata Independiente",
+  868, "Renovación Nacional",
+  882, "Independientes",
+  886, "Partido Por la Democracia",
+  888, "Partido Radical de Chile",
+  890, "Independientes",
+  894, "Partido Demócrata Cristiano",
+  895, "Unión Demócrata Independiente",
+  902, "Partido Por la Democracia",
+  903, "Independientes",
+  907, "Unión Demócrata Independiente",
+  910, "Partido Por la Democracia",
+  916, "Partido Por la Democracia",
+  801, "Renovación Nacional",
+  809, "Unión Demócrata Independiente",
+  820, "Renovación Nacional",
+  824, "Partido Socialista",
+  829, "Partido Demócrata Cristiano",
+  831, "Unión Demócrata Independiente",
+  833, "Partido Socialista",
+  835, "Independientes",
+  836, "Partido Radical de Chile",
+  838, "Unión Demócrata Independiente",
+  839, "Partido Por la Democracia",
+  845, "Partido Por la Democracia",
+  846, "Renovación Nacional",
+  847, "Partido Demócrata Cristiano",
+  851, "Renovación Nacional",
+  852, "Partido Por la Democracia",
+  853, "Independientes",
+  861, "Unión Demócrata Independiente",
+  867, "Renovación Nacional",
+  874, "Unión Demócrata Independiente",
+  876, "Partido Por la Democracia",
+  880, "Partido Socialista",
+  883, "Partido Socialista",
+  891, "Renovación Nacional",
+  896, "Renovación Nacional",
+  900, "Partido Radical de Chile",
+  901, "Partido Socialista",
+  905, "Unión Demócrata Independiente",
+  909, "Renovación Nacional",
+  911, "Partido Demócrata Cristiano",
+  915, "Renovación Nacional",
+  919, "Unión Demócrata Independiente",
+  922, "Partido Por la Democracia",
+  924, "Partido Socialista",
+  927, "Renovación Nacional",
+  928, "Unión Demócrata Independiente",
+  929, "Partido Por la Democracia",
+  930, "Partido Comunista",
+  934, "Partido Demócrata Cristiano",
+  935, "Renovación Nacional",
+  938, "Unión Demócrata Independiente",
+  939, "Unión Demócrata Independiente",
+  941, "Partido Socialista",
+  943, "Independientes",
+  944, "Unión Demócrata Independiente",
+  948, "Renovación Nacional",
+  951, "Unión Demócrata Independiente",
+  954, "Unión Demócrata Independiente",
+  955, "Unión Demócrata Independiente",
+  958, "Partido Por la Democracia",
+  960, "Partido Por la Democracia",
+  964, "Unión Demócrata Independiente",
+  965, "Unión Demócrata Independiente",
+  966, "Unión Demócrata Independiente",
+  969, "Partido Demócrata Cristiano",
+  970, "Unión Demócrata Independiente",
+  977, "Partido Demócrata Cristiano",
+  978, "Unión Demócrata Independiente",
+  979, "Independientes",
+  980, "Partido Por la Democracia",
+  983, "Partido Demócrata Cristiano",
+  988, "Evolución Política",
+  1004, "Partido Socialista",
+  1007, "Partido Por la Democracia",
+  1026, "Renovación Nacional"
   
 )
 
