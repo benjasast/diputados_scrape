@@ -55,6 +55,15 @@ count_voting_pattern <- function(df_votes_detail_long){
   # Try function
   #pair_voting_pattern("1017","1018")
   
+  # Extract voting patterns of pairs ----------------------------------------
+  
+  # Grab them in parallel
+  plan(multisession)
+  
+  output <- future_map2(pairs$dip1,pairs$dip2,pair_voting_pattern) %>% 
+    reduce(union_all)
+  
+  output
   
 }
 

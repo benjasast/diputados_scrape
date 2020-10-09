@@ -22,57 +22,22 @@ rm(list=ls())
 # Load data ---------------------------------------------------------------
 
 # political affiliation
-political_affiliation_long <- readRDS('./scraped_data/political_affiliation.rds')
+political_affiliation <- readRDS('./scraped_data/political_affiliation_wtime.rds')
 
-# Clean political affiliation
-political_affiliation_wide <- political_affiliation_long %>% 
-  select(-regex) %>% 
-  pivot_wider(names_from = variable, values_from = value)
-
-# Coalition information
-p9_coalitions <- readRDS('./scraped_data/p9_coalitions_info.rds')
-
-# Coalition relationships
-coalition_relationships <- readRDS('./scraped_data/table_coalition_relationships_p9.rds')
+# Pair membership
+pair_membership <- readRDS('./scraped_data/table_pair_membership.rds')
 
 # Legislative periods information
 legislative_periods_info <- readRDS('./scraped_data/table_legislative_periods_info.rds')
 
-# Vote information
+# Vote information - all
 vote_information <- readRDS('./scraped_data/table_vote_information.rds')
 
-# vote detail: 2002-2018
-votatacion_detalle_2002_2018 <- readRDS('./scraped_data/vote_info_02_18.rds')
+# vote detail - all
+vote_details <- readRDS('./scraped_data/table_vote_details.rds')
 
-# vote details:2018-2020
-votatacion_detalle_2018_2020 <- readRDS('./scraped_data/table_vote_details.rds')
-
-# vote details long
+# vote detail - all (long)
 votatacion_detalle_long <- readRDS('./scraped_data/table_vote_details_long.rds')
-
-
-
-# Check all diputados present in data have affiliation --------------------
-
-all_diputados <- votatacion_detalle_long %>% 
-  select(diputado_id) %>% 
-  mutate(diputado_id = diputado_id %>% as.double()) %>% 
-  distinct() %>% 
-  left_join(political_affiliation_wide, by = c("diputado_id" = "DIPID") )
-  
-missing_data <- all_diputados %>% 
-  filter(str_length(party)<2 )
-
-input_missing_data <- tribble(
-  ~diputado_id, ~party, ~bancada, ~region, ~comunas,
-  1026, "Renovación Nacional","","","",
-  970, "Unión Demócrata Independiente","","","",
-  949, "Renovación Nacional","","","")
-
-all_diputados_winfo <- all_diputados %>% 
-  filter(str_length(party)>2 ) %>% 
-  union_all(input_missing_data)
-
 
 # Get data ready for splitting --------------------------------------------
 
@@ -82,9 +47,6 @@ vote_information_cleandate <- vote_information %>%
 
 legislative_periods_info_winterval <- legislative_periods_info %>% 
   mutate(date_interval = lubridate:::interval(date_start,date_end))
-
-vote_information_cleandate
-legislative_periods_info_winterval
 
 # Make fuzzy match betwen dataframes
 fuzzy_date_match <- fuzzy_left_join(
@@ -97,36 +59,72 @@ fuzzy_date_match <- fuzzy_left_join(
 
 # Data ready for splitting
 vote_information_splitready <- fuzzy_date_match %>% 
-  select(vote_id,fecha,tipo_codigo,resultado,quorum,boletin,tramite,informe,starts_with("total"),articulo,sesion,legislative_period_id,legislative_name,legislative_name)
+  mutate(year = year(fecha),
+         month = month(fecha)) %>% 
+  select(vote_id,fecha,year,month,tipo_codigo,resultado,quorum,boletin,tramite,informe,starts_with("total"),articulo,sesion,legislative_period_id,legislative_name,legislative_name)
 
 # Time-splitting: or variable splitting -----------------------------------
 
-# Filter votes to only have this period
-p9_votes <- vote_information_splitready %>% 
-  filter(legislative_period_id==9) %>% 
-  mutate(year = year(fecha))
+# nest votes by year only (just for now) - we will do year-month later
+vote_information_nested <- vote_information_splitready %>% 
+  group_by(legislative_name,year) %>% 
+  nest()
 
-p9_votes_rel <- p9_votes %>% 
-  select(vote_id,year)
+# Use split votes on voting details to grab votes correspinding -----------------------------
 
+join_vote_details <- function(df1,df2 = votatacion_detalle_long){
+  df1 %>% 
+    inner_join(df2, by = "vote_id")
+}
 
-# Grab only votacion_detail that matches the ids
-p9_votacion_detalle <- votatacion_detalle_long %>% 
-  inner_join(p9_votes_rel)
+# Add the voting details that match each period
+vote_information_nested_wdetails <- vote_information_nested %>% 
+  mutate(vote_details = map(data,join_vote_details))
 
-p9_votacion_detalle %>% 
-  count(vote)
-
-
-# Split data by years
-p9_votacion_detalle_by_year <- p9_votacion_detalle %>% 
-  split(p9_votacion_detalle$year)
 
 # Grab network data and descriptive statistics ----------------------------
 source('function_calculation_votingpatterns_descstats.R')
 
-# Run function for each year of data and save results
+check <- vote_information_nested_wdetails %>% 
+  select(year,legislative_name)
 
+# Let's compute separately for each year-period (maybe I will put this in the nest later)
+results_2002 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[1]],'2002')
+results_2003 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[2]],'2003')
+results_2004 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[3]],'2004')
+results_2005 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[4]],'2005')
+results_n2006 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[5]],'n_2006')
+
+results_2006 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[6]],'2006')
+results_2007 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[7]],'2007')
+results_2008 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[8]],'2008')
+results_2009 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[9]],'2009')
+results_n_2010 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[10]],'n_2010')
+
+results_2010 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[11]],'2010')
+results_2011 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[12]],'2011')
+results_2012 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[13]],'2012')
+results_2013 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[14]],'2013')
+results_n_2014 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[15]],'n_2014')
+
+results_2014 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[16]],'2014')
+results_2015 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[17]],'2015')
+results_2016 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[18]],'2016')
+results_2017 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[19]],'2017')
+results_n_2018 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[20]],'n_2018')
+
+results_2018 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[21]],'2018')
+results_2019 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[22]],'2019')
+results_2020 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[23]],'2020')
+
+
+
+
+
+
+
+
+# Run function for each year of data and save results
 results_2018 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2018"]],p9_coalitions,split_name = "2018")
 results_2019 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2019"]],p9_coalitions,split_name = "2019")
 results_2020 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2020"]],p9_coalitions,split_name = "2020")
@@ -152,7 +150,6 @@ votes_by_coal <- network_data %>%
             mean_opp = mean(n_opposite_bothpresent, na.rm = TRUE))
 
 
-votes_by_coal
 
 votes_by_coal %>% 
   ggplot(aes(year,mean_same)) +
