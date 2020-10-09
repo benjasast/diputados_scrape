@@ -1,0 +1,187 @@
+---
+title: "p03_master_figures_stats"
+output: html_document
+---
+
+```{r set-up, echo=FALSE, message=FALSE}
+
+# Libraries
+library(tidyverse)
+library(kableExtra)
+
+# remove objects
+rm(list=ls())
+
+# Load data
+net_data <- readRDS('table_network_by_year.rds')
+
+vote_info <- readRDS('./scraped_data/table_vote_information.rds') %>% 
+  mutate(fecha = as.Date(fecha),
+         year = year(fecha))
+
+```
+
+
+# Cuanto votan de acuerdo las parejas de diputados?
+```{r overall_votes_in_agreement}
+
+summary_rel_coalition_gen <- net_data %>% 
+  group_by(year) %>% 
+  summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
+            `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
+            `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
+  pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
+
+summary_rel_coalition_gen %>% 
+  ggplot(aes(year,value, fill=var)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = seq(2002, 2020, by = 2)) +
+  ggtitle("Cuanto votan de acuerdo las parejas de diputados?")
+
+
+```
+
+
+
+```{r Promedio votos de acuerdo por coalition-mix}
+
+summary_rel_coalition <- net_data %>% 
+  group_by(year,rel_coalition) %>% 
+  summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
+            `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
+            `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
+  pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
+
+
+summary_rel_coalition %>% 
+  filter(var=="Prop. votan igual") %>% 
+  filter(rel_coalition!="Independent present") %>% 
+  ggplot(aes(year,value)) +
+  geom_line(aes(color = rel_coalition)) +
+  geom_point(aes(color = rel_coalition)) +
+  theme(legend.position="bottom") +
+  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  ggtitle('Promedio de porcentaje de votos de acuerdo para distintos tipos de pareja')
+
+
+```
+
+```{r promedio porcentaje desacuerdo por coalition-mix}
+
+summary_rel_coalition %>% 
+  filter(var=="Prop. votan distinto") %>% 
+  filter(rel_coalition!="Independent present") %>% 
+  ggplot(aes(year,value)) +
+  geom_line(aes(color = rel_coalition)) +
+  geom_point(aes(color = rel_coalition)) +
+  theme(legend.position="bottom") +
+  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  ggtitle('Promedio de porcentaje de votos en desacuerdo para distintos tipos de pareja')
+
+
+
+```
+
+
+```{r numero de votaciones aprobadas/no aprobadas por quorum}
+
+vote_info_custom <- vote_info %>% 
+  mutate(vote_apobado = (resultado %in% c('APROBADO','UNANIME')),
+         quorum_agg = case_when(quorum %in% c('QUORUM CALIFICADO','QUORUM SIMPLE','LEY ORGANICA CONSTITUCIONAL') ~ quorum,
+                                quorum %in% c('REFORMA CONSTITUCIONAL 2/3','REFORMA CONSTITUCIONAL 3/5') ~ 'REFORMA CONSTITUCIONAL 2/3 o 3/5' ,
+                                quorum %in% c('1/3','2/3 PRESENTES','3/5') ~ 'OTRO' )  )
+
+summary_votes <- vote_info_custom %>% 
+  group_by(quorum_agg,year) %>% 
+  summarise(per_aprobado = mean(vote_apobado, na.rm = TRUE))
+
+summary_votes %>% 
+  ggplot(aes(year,per_aprobado)) +
+  geom_line(aes(color=quorum_agg)) +
+  geom_point(aes(color=quorum_agg)) +
+  theme(legend.position="bottom") +
+  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  ggtitle('Proporcion votaciones aprobadas por año y quorum')
+
+
+```
+
+
+```{r porcentaje_votos_acuerdo_same_party_pairs}
+
+summary_rel_same_party <- net_data %>% 
+  filter(party1==party2) %>% 
+  filter(party1!='Independientes') %>% 
+  filter(party1!='Federación Regionalista Verde Social') %>% 
+  group_by(year,party1,party2) %>% 
+  summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
+            `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
+            `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
+  pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
+
+summary_rel_same_party %>% 
+  filter(var=="Prop. votan igual") %>% 
+  ggplot(aes(year,value)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~party1) +
+  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  ggtitle("Prop. votos de acuerdo para parejas del mismo partido")
+  
+```
+
+```{r prop votos desacuerdo mismo partido}
+
+summary_rel_same_party %>% 
+  filter(var=="Prop. votan distinto") %>% 
+  ggplot(aes(year,value)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~party1) +
+  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  ggtitle("Prop. votos desacuerdo para parejas del mismo partido")
+
+```
+
+
+```{r Proporcion votos de acuerdo - grupos inter}
+
+summary_rel_inter <- net_data %>% 
+  filter(!is.na(rel_party)) %>% 
+  group_by(year,rel_party) %>% 
+  summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
+            `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
+            `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
+  pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
+
+summary_rel_inter %>% 
+  filter(var=="Prop. votan igual") %>% 
+  ggplot(aes(year,value)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~rel_party) +
+  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  ggtitle("Prop. votos de acuerdo para parejas Inter-coalición")
+
+
+```
+
+
+```{r Prop. votos en desacuerdo para parejas inter-coalicion}
+
+summary_rel_inter %>% 
+  filter(var=="Prop. votan distinto") %>% 
+  ggplot(aes(year,value)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~rel_party) +
+  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  ggtitle("Prop. votos desacuerdo para parejas Inter-coalición")
+
+
+
+```
+
+
+
+

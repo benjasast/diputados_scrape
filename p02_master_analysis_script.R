@@ -95,6 +95,7 @@ results_2004 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_d
 results_2005 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[4]],'2005')
 results_n2006 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[5]],'n_2006')
 
+
 results_2006 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[6]],'2006')
 results_2007 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[7]],'2007')
 results_2008 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_details[[8]],'2008')
@@ -119,37 +120,76 @@ results_2020 <- calculate_votingpatterns(vote_information_nested_wdetails$vote_d
 
 
 
-
-
-
-
-
-# Run function for each year of data and save results
-results_2018 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2018"]],p9_coalitions,split_name = "2018")
-results_2019 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2019"]],p9_coalitions,split_name = "2019")
-results_2020 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2020"]],p9_coalitions,split_name = "2020")
-
-
-# Load results from network data and desc stats ---------------------------
-
-results_2018 <- readRDS('./scraped_data/network_n_stats_2018.rds')
-results_2019 <- readRDS('./scraped_data/network_n_stats_2019.rds')
-results_2020 <- readRDS('./scraped_data/network_n_stats_2020.rds')
-
 # Create network data -----------------------------------------------------
 
-network_data <- reduce(list(results_2018$network %>% 
-                           mutate(year=2018),results_2019$network %>% 
-                           mutate(year=2019),results_2020$network %>% 
-                           mutate(year=2020) ), union_all)
+# Skipping overlapping years for now
+network_data <- list(results_2002 %>% mutate(year=2002),
+                     results_2003 %>% mutate(year=2003),
+                     results_2004 %>% mutate(year=2004),
+                     results_2005 %>% mutate(year=2005),
+                     results_2006 %>% mutate(year=2006),
+                     results_2007 %>% mutate(year=2007),
+                     results_2008 %>% mutate(year=2008),
+                     results_2009 %>% mutate(year=2009),
+                     results_2010 %>% mutate(year=2010),
+                     results_2011 %>% mutate(year=2011),
+                     results_2012 %>% mutate(year=2012),
+                     results_2013 %>% mutate(year=2013),
+                     results_2014 %>% mutate(year=2014),
+                     results_2015 %>% mutate(year=2015),
+                     results_2016 %>% mutate(year=2016),
+                     results_2017 %>% mutate(year=2017),
+                     results_2018 %>% mutate(year=2018),
+                     results_2019 %>% mutate(year=2019),
+                     results_2020 %>% mutate(year=2020) ) %>% 
+  reduce(union_all)
 
+
+# Attach political affiliation --------------------------------------------
+
+# Political affiliation by year
+political_affiliation_year <- political_affiliation %>% 
+  mutate(year = year(date)) %>% 
+  select(diputado_id,party,year) %>% 
+  group_by(diputado_id,year) %>% 
+  slice(1) %>% 
+  ungroup()
+
+
+# Join political affiliation to network data
+network_data_waffiliation <- network_data %>% 
+  mutate_at(vars(dip_1,dip_2),as.double) %>% 
+  left_join(political_affiliation_year, by = c("dip_1"="diputado_id","year"="year")) %>%  # diptuado 1
+  rename(party1 = party) %>% 
+  left_join(political_affiliation_year, by = c("dip_2"="diputado_id","year"="year")) %>%   # diptuado 2
+  rename(party2 = party)
+
+# Attach pair membership --------------------------------------------------
+
+# We need to make two joins to make sure there are matches (data is in unique combo set)
+network_data_wpairmembership <- network_data_waffiliation %>% 
+  left_join(pair_membership, by = c("party1" = "party1", "party2" = "party2")) %>% # first run
+  left_join(pair_membership, by = c("party2" = "party1", "party1" = "party2")) %>%  # second run
+  mutate(rel_party = ifelse(!is.na(rel_party.x),rel_party.x,rel_party.y),
+         rel_coalition_gen = ifelse(!is.na(rel_coalition_gen.x),rel_coalition_gen.x,rel_coalition_gen.y),
+         rel_coalition = ifelse(!is.na(rel_coalition.x),rel_coalition.x,rel_coalition.y) ) %>% 
+  select(-rel_party.x, -rel_party.y, -rel_coalition_gen.x,
+         -rel_coalition_gen.y, -rel_coalition.x, -rel_coalition.y)
+
+
+
+# Export network data by year ---------------------------------------------
+
+saveRDS(network_data_wpairmembership,'table_network_by_year.rds')
+
+  
+  
+  
 # Votes in agreement all present
 votes_by_coal <- network_data %>% 
   group_by(pair_coalition, year) %>% 
   summarise(mean_same = mean(n_same_bothpresent, na.rm = TRUE),
             mean_opp = mean(n_opposite_bothpresent, na.rm = TRUE))
-
-
 
 votes_by_coal %>% 
   ggplot(aes(year,mean_same)) +
