@@ -32,6 +32,8 @@ political_affiliation_wide <- political_affiliation_long %>%
 # Coalition information
 p9_coalitions <- readRDS('./scraped_data/p9_coalitions_info.rds')
 
+# Coalition relationships
+coalition_relationships <- readRDS('./scraped_data/table_coalition_relationships_p9.rds')
 
 # Legislative periods information
 legislative_periods_info <- readRDS('./scraped_data/table_legislative_periods_info.rds')
@@ -39,8 +41,11 @@ legislative_periods_info <- readRDS('./scraped_data/table_legislative_periods_in
 # Vote information
 vote_information <- readRDS('./scraped_data/table_vote_information.rds')
 
-# vote details
-votatacion_detalle <- readRDS('./scraped_data/table_vote_details.rds')
+# vote detail: 2002-2018
+votatacion_detalle_2002_2018 <- readRDS('./scraped_data/vote_info_02_18.rds')
+
+# vote details:2018-2020
+votatacion_detalle_2018_2020 <- readRDS('./scraped_data/table_vote_details.rds')
 
 # vote details long
 votatacion_detalle_long <- readRDS('./scraped_data/table_vote_details_long.rds')
@@ -68,10 +73,10 @@ all_diputados_winfo <- all_diputados %>%
   filter(str_length(party)>2 ) %>% 
   union_all(input_missing_data)
 
-# Split data into time periods, or other variables --------------------------------------------
+
+# Get data ready for splitting --------------------------------------------
 
 # Objective 1: Add a column with legislative period belonging to each vote.
-
 vote_information_cleandate <- vote_information %>% 
   mutate(fecha = date(fecha))
 
@@ -94,88 +99,81 @@ fuzzy_date_match <- fuzzy_left_join(
 vote_information_splitready <- fuzzy_date_match %>% 
   select(vote_id,fecha,tipo_codigo,resultado,quorum,boletin,tramite,informe,starts_with("total"),articulo,sesion,legislative_period_id,legislative_name,legislative_name)
 
-# Check how many times voted together -------------------------------------
-source('function_count_voting_pattern.R')
-
-
 # Time-splitting: or variable splitting -----------------------------------
 
 # Filter votes to only have this period
-period_9 <- vote_information_splitready %>% 
-  filter(legislative_period_id==9)
+p9_votes <- vote_information_splitready %>% 
+  filter(legislative_period_id==9) %>% 
+  mutate(year = year(fecha))
 
-period_9_vote_ids <- period_9 %>% 
-  select(vote_id) %>% 
-  distinct()
+p9_votes_rel <- p9_votes %>% 
+  select(vote_id,year)
+
 
 # Grab only votacion_detail that matches the ids
-votatacion_detalle_period_9 <- votatacion_detalle_long %>% 
-  inner_join(period_9_vote_ids)
+p9_votacion_detalle <- votatacion_detalle_long %>% 
+  inner_join(p9_votes_rel)
+
+# Split data by years
+p9_votacion_detalle_by_year <- p9_votacion_detalle %>% 
+  split(p9_votacion_detalle$year)
+
+# Grab network data and descriptive statistics ----------------------------
+source('function_calculation_votingpatterns_descstats.R')
+
+# Run function for each year of data and save results
+
+results_2018 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2018"]],p9_coalitions,split_name = "2018")
+results_2019 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2019"]],p9_coalitions,split_name = "2019")
+results_2020 <- calculate_votingpatterns_descstats(p9_votacion_detalle_by_year[["2020"]],p9_coalitions,split_name = "2020")
 
 
+# Load results from network data and desc stats ---------------------------
 
-# Obtain voting patterns and descriptive stats ----------------------------
+results_2018 <- readRDS('./scraped_data/network_n_stats_2018.rds')
+results_2019 <- readRDS('./scraped_data/network_n_stats_2019.rds')
+results_2020 <- readRDS('./scraped_data/network_n_stats_2020.rds')
+
+# Create network data -----------------------------------------------------
+
+network_data <- reduce(list(results_2018$network %>% 
+                           mutate(year=2018),results_2019$network %>% 
+                           mutate(year=2019),results_2020$network %>% 
+                           mutate(year=2020) ), union_all)
+
+# Votes in agreement all present
+votes_by_coal <- network_data %>% 
+  group_by(pair_coalition, year) %>% 
+  summarise(mean_same = mean(n_same_bothpresent, na.rm = TRUE),
+            mean_opp = mean(n_opposite_bothpresent, na.rm = TRUE))
 
 
+votes_by_coal
 
-
-# Add pair characteristics ------------------------------------------------
-
-vote_pattern_period_9_wpairinfo <- vote_pattern_period_9_w_affiliation %>% 
-  left_join(p9_coalitions, by = c("dip1_party" = "party") ) %>% 
-  rename(dip1_coalition = coalition) %>% 
-  left_join(p9_coalitions, by = c("dip2_party" = "party") ) %>% 
-  rename(dip2_coalition = coalition)
+votes_by_coal %>% 
+  ggplot(aes(year,mean_same)) +
+  geom_line(aes(color=pair_coalition)) +
+  geom_point(aes(color=pair_coalition)) +
+  ggtitle("Votos de acuerdo")
   
-
-# Add types of pair
-vote_pattern_period_9_wpairinfo_clean <- vote_pattern_period_9_wpairinfo %>% 
-  left_join(coalition_relationships3, by = c("dip1_coalition" = "coalition1", "dip2_coalition" = "coalition2")) %>% 
-  left_join(coalition_relationships3, by = c("dip2_coalition" = "coalition1", "dip1_coalition" = "coalition2")) %>% 
-  mutate(pair_coalition = ifelse(!is.na(pair_coalition.x),pair_coalition.x,pair_coalition.y),
-         pair_coalition_gen = ifelse(!is.na(pair_coalition_gen.x),pair_coalition_gen.x,pair_coalition_gen.y) ) %>% 
-  select(-ends_with('.y'),- ends_with('.x') )
+votes_by_coal %>% 
+  ggplot(aes(year,mean_opp)) +
+  geom_line(aes(color=pair_coalition)) +
+  geom_point(aes(color=pair_coalition)) +
+  ggtitle("Votos desacuerdo")
 
 
-# Descriptive statistics --------------------------------------------------
 
-nvotes_p9 <- nrow(period_9)
 
-# Normalize percentage by total votes in year and votes present
-p9_vote_pattern_normalized <- vote_pattern_period_9_wpairinfo_clean %>% 
-  mutate_at(vars(n_same,n_opposite), .funs = list(bothpresent = ~./votaciones_both_present) ) %>% 
-  mutate_at(vars(n_same,n_opposite), .funs = list(total = ~./nvotes_p9) )
+results_2018$network$n_same_bothpresent %>% mean(na.rm=TRUE)
+results_2019$network$n_same_bothpresent %>% mean(na.rm=TRUE)
+results_2020$network$n_same_bothpresent %>% mean(na.rm=TRUE)
 
-descriptive_stats1 <- p9_vote_pattern_normalized %>% 
+
+results_2018$network %>% 
   group_by(pair_coalition) %>% 
-  summarise(avg_nsame = mean(n_same_bothpresent, na.rm = TRUE),
-            avg_nopp = mean(n_opposite_bothpresent, na.rm = TRUE))
-
-descriptive_stats2 <- p9_vote_pattern_normalized %>% 
-  group_by(pair_coalition_gen) %>% 
-  summarise(avg_nsame = mean(n_same_bothpresent, na.rm = TRUE),
-            avg_nopp = mean(n_opposite_bothpresent, na.rm = TRUE))
-
-descriptive_stats3 <- p9_vote_pattern_normalized %>% 
-  group_by(pair_coalition) %>% 
-  summarise(avg_nsame = mean(n_same_total, na.rm = TRUE),
-            avg_nopp = mean(n_opposite_total, na.rm = TRUE))
-
-descriptive_stats4 <- p9_vote_pattern_normalized %>% 
-  group_by(pair_coalition_gen) %>% 
-  summarise(avg_nsame = mean(n_same_total, na.rm = TRUE),
-            avg_nopp = mean(n_opposite_total, na.rm = TRUE))
-
-
-
-
-
-
-
-
-
-
-
+  summarise(mean_same = mean(n_same_total, na.rm = TRUE),
+            mean_opp = mean(n_opposite_total, na.rm = TRUE))
 
 
 

@@ -14,8 +14,6 @@ count_voting_pattern <- function(df_votes_detail_long){
     distinct() %>% 
     as_vector()
   
-  length(dip_ids)
-  
   pairs <- combn(dip_ids,2) %>% 
     t() %>% 
     as_tibble() %>% 
@@ -34,15 +32,17 @@ count_voting_pattern <- function(df_votes_detail_long){
       group_by(vote_id) %>% 
       mutate(n_obs = n()) %>% 
       filter(n_obs==2) %>% 
-      mutate(same_vote = first(vote)==last(vote),
+      mutate(same_vote = first(vote)==last(vote) & (first(vote) %in% c('AFIRMATIVO','CONTRA') ),
              opposite_vote = first(vote)=="AFIRMATIVO" & last(vote)=="CONTRA" |
-               first(vote)=="CONTRA" & last(vote)=="AFIRMATIVO" ) %>% 
+               first(vote)=="CONTRA" & last(vote)=="AFIRMATIVO",
+             abst_vote = ( (first(vote) %in% c('ABSTENCION','DISPENSADO') ) |  (last(vote) %in% c('ABSTENCION','DISPENSADO') )   )) %>% 
       slice(1) %>% # Keep one observation only
       ungroup()
     
      summary_vote_pattern <- votes_both_present %>% 
       summarise(n_same = sum(same_vote),
-                n_opposite = sum(opposite_vote) ) %>% 
+                n_opposite = sum(opposite_vote),
+                n_abst = sum(abst_vote)) %>% 
       mutate(dip_1 = id1,
              dip_2 = id2,
              votaciones_both_present = nrow(votes_both_present)) 
@@ -56,14 +56,6 @@ count_voting_pattern <- function(df_votes_detail_long){
   #pair_voting_pattern("1017","1018")
   
   
-  # Extract voting patterns of pairs ----------------------------------------
-  
-  # Grab them in parallel
-  plan(multisession)
-  
-  try <- future_map2(pairs$dip1,pairs$dip2,pair_voting_pattern) %>% 
-    reduce(union_all)
-
 }
 
 

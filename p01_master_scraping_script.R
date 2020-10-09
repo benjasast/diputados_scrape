@@ -37,7 +37,7 @@ grab_voting_details_and_info_V <- Vectorize(grab_voting_details_and_info)
 # Apply function to grab votacion detalle ----------------------------------------------------------
 
 # Apply function in parallel
-plan(multisession, workers = 4)
+plan(multisession)
 
 # Get results
 vote_info <- future_map(vote_data$vote_id,grab_voting_details_and_info, .progress = TRUE)
@@ -57,8 +57,6 @@ source('function_grab_diputados_personal_information.R')
 ids_legislative_periods <- c(1,2,3,4,5,6,8,9)
 
 diputados_personal_info <- map(ids_legislative_periods,grab_diputados_personal_information)
-
-diputados_personal_info[[4]]
 
 # Save data
 saveRDS(diputados_personal_info,'./scraped_data/diputados_personal_info.rds')
@@ -84,7 +82,6 @@ political_affiliation_all <- political_affiliation %>%
 
 # Save results
 saveRDS(political_affiliation_all,'./scraped_data/political_affiliation.rds')
-
 
 
 # Grab legilslative periods -----------------------------------------------

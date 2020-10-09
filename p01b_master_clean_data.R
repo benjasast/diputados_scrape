@@ -22,7 +22,12 @@ rm(list=ls())
 
 # Load data ---------------------------------------------------------------
 
-vote_details <- readRDS('./scraped_data/vote_info_18_20.rds')
+vote_details_02_20 <- readRDS('./scraped_data/vote_info_02_18.rds')
+vote_details_18_20 <- readRDS('./scraped_data/vote_info_18_20.rds')
+
+# Put all votacion detalle together
+vote_details <- vote_details_02_20 %>% 
+  union_all(vote_details_18_20)
 
 
 # Extract vote information ------------------------------------------------
@@ -49,7 +54,6 @@ vote_information_table_clean <- vote_information_table %>%
 # Pivot data wider
 vote_information_table_wide <- vote_information_table_clean %>% 
   pivot_wider(names_from = variable,values_from = value)
-
 
 # Export table
 saveRDS(vote_information_table_wide,'./scraped_data/table_vote_information.rds')
@@ -79,7 +83,141 @@ saveRDS(vote_detail_table_wide,'./scraped_data/table_vote_details.rds')
 # Save long format too
 saveRDS(vote_detail_table_clean,'./scraped_data/table_vote_details_long.rds')
 
-# Political coalitions ----------------------------------------------------
+
+# Political parties -------------------------------------------------------
+
+political_affiliation <- readRDS('./scraped_data/political_affiliation.rds')
+
+# Make sure all diputados present in the data have an assigned party.
+
+# Make sure the information is yearly so it can be changed appropiately, in case of changes to party
+# membership.
+
+# list with all diputados present in our data
+diputado_id_list <- vote_detail_table_clean %>% 
+  select(diputado_id) %>% 
+  mutate(diputado_id = diputado_id %>% as.double()) %>% 
+  distinct()
+
+
+# Check they all have information - and pivot wider
+political_affiliation_raw <- political_affiliation %>% 
+  rename(diputado_id = DIPID)  %>% 
+  inner_join(diputado_id_list) %>% 
+  select(-regex) %>% 
+  pivot_wider(names_from = variable, values_from = value)
+
+# Check the ones without party
+no_party <-  political_affiliation_raw %>% 
+  filter(str_length(party)==0)
+
+no_party[81:91,]
+
+political_affiliation_raw %>% 
+  count(party) %>% 
+  arrange(desc(n))
+
+# Input information for the non-present
+party_input <- tribble(
+  ~diputado_id, ~party,
+  132, "Renovación Nacional",
+  137, "Partido Demócrata Cristiano",
+  150, "Partido Socialista",
+  155, "Renovación Nacional",
+  169, "Partido Por la Democracia",
+  175, "Unión Demócrata Independiente",
+  176, "Partido Socialista",
+  178, "Renovación Nacional",
+  179, "Unión Demócrata Independiente",
+  206, "Independientes",
+  208, "Unión Demócrata Independiente",
+  211, "Partido Por la Democracia",
+  220, "Partido Demócrata Cristiano",
+  222, "Partido Demócrata Cristiano",
+  239, "Partido Demócrata Cristiano",
+  802, "Partido Socialista",
+  806, "Renovación Nacional",
+  821, "Unión Demócrata Independiente",
+  822, "Unión Demócrata Independiente",
+  858, "Partido Demócrata Cristiano",
+  864, "Unión Demócrata Independiente",
+  870, "Partido Socialista",
+  873, "Partido Por la Democracia",
+  877, "Partido Demócrata Cristiano",
+  887, "Unión Demócrata Independiente",
+  906, "Unión Demócrata Independiente",
+  932, "Partido Demócrata Cristiano",
+  933, "Partido Demócrata Cristiano",
+  962, "Unión Demócrata Independiente",
+  158, "Partido Por la Democracia",
+  177, "Partido Por la Democracia",
+  181, "Partido Demócrata Cristiano",
+  193, "Partido Socialista",
+  195, "Partido Socialista",
+  205, "Partido Por la Democracia",
+  224, "Partido Demócrata Cristiano",
+  804, "Partido Socialista",
+  805, "Unión Demócrata Independiente",
+  818, "Renovación Nacional",
+  819, "Partido Por la Democracia",
+  832, "Partido Socialista",
+  834, "Renovación Nacional",
+  841, "Partido Demócrata Cristiano",
+  860, "Partido Demócrata Cristiano",
+  863, "Renovación Nacional",
+  871, "Unión Demócrata Independiente",
+  884, "Unión Demócrata Independiente",
+  892, "Partido Por la Democracia",
+  904, "Partido Por la Democracia",
+  912, "Renovación Nacional",
+  914, "Partido Radical de Chile",
+  140, "Partido Demócrata Cristiano",
+  159, "Unión Demócrata Independiente",
+  161, "Renovación Nacional",
+  165, "Unión Demócrata Independiente",
+  170, "Partido Demócrata Cristiano",
+  187, "Unión Demócrata Independiente",
+  190, "Partido Demócrata Cristiano",
+  213, "Partido Demócrata Cristiano",
+  221, "Partido Por la Democracia",
+  807, "Unión Demócrata Independiente",
+  814, "Renovación Nacional",
+  817, "Partido Socialista",
+  825, "Renovación Nacional",
+  826, "Unión Demócrata Independiente",
+  828, "Unión Demócrata Independiente",
+  842, "Renovación Nacional",
+  849, "Partido Por la Democracia",
+  854, "Partido Por la Democracia",
+  859, "Partido Por la Democracia",
+  878, "Partido Demócrata Cristiano",
+  881, "Renovación Nacional",
+  889, "Unión Demócrata Independiente",
+  899, "Partido Por la Democracia",
+  918, "Partido Demócrata Cristiano",
+  921, "Renovación Nacional",
+  947, "Partido Demócrata Cristiano",
+  151, "Unión Demócrata Independiente",
+  164, "Independientes",
+  166, "Independientes",
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+)
+
+
+
+
+# Coalitions --------------------------------------------------------------
 
 alianza <- 'Coalición por el Cambio'
 concertacion <- 'Ex-Nueva Mayoria'
