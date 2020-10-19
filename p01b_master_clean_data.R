@@ -15,6 +15,7 @@ library(RSelenium)
 library(xml2)
 library(furrr)
 library(rlist)
+library(lubridate)
 
 rm(list=ls())
 
@@ -93,6 +94,8 @@ political_affiliation <- readRDS('./scraped_data/political_affiliation.rds')
 # Make sure the information is yearly so it can be changed appropiately, in case of changes to party
 # membership.
 
+vote_detail_table_clean <- readRDS('./scraped_data/table_vote_details_long.rds')
+
 # list with all diputados present in our data
 diputado_id_list <- vote_detail_table_clean %>% 
   select(diputado_id) %>% 
@@ -126,6 +129,71 @@ time_df <- tibble(date = time_grid) %>%
 # Make a cross join
 political_affiliation_wtime <- political_affiliation %>% 
   full_join(time_df, by = "aux")
+
+# Prepare corrections for party switches -------------------------------------
+
+# Import party switch data
+party_switches_raw <- readxl::read_xlsx('./scraped_data/table_party_switches.xlsx') %>% 
+  select(-old_version_name) %>% 
+  mutate_at(vars(ends_with("date")),~lubridate::as_date(.) %>% floor_date("month")) %>%  # Make sure changes are assigned at beggining of month
+  rename(s1_party =  s1_part,
+         original_party = partido)
+
+# Data in long format: with switches to match.
+party_switches_long <- party_switches_raw %>%
+  pivot_longer(starts_with("s"),
+               names_to = c("set", ".value"),
+               names_pattern = "(.+)_(.+)" ) %>% 
+  na.omit()
+
+# Create intervals (for party membership)
+party_switches_long_ready <- party_switches_long %>% 
+  arrange(id_diputado,date) %>% 
+  group_by(id_diputado) %>% 
+  mutate(end_date = lag(date)-1) %>%
+  mutate(end_date = ifelse(is.na(end_date),as_date('2025-01-01'),end_date) %>% as_date()) %>%  # Add fake end date for unique casee
+  rename(start_date = date) %>% 
+  select(id_diputado, party, start_date, end_date)
+  
+# Extract data for original parties (use for inputting original party) -- as current information is scrapped as last party
+party_switches_original_parties <- party_switches_raw %>% 
+  select(id_diputado,original_party) %>% 
+  distinct()
+
+
+
+# Introduce switches ------------------------------------------------------
+
+# Keep only guys with switches
+df_implement_switches <- political_affiliation_wtime %>% 
+  filter(diputado_id %in% party_switches_original_parties$id_diputado)
+
+
+# Put the original party (as starting point)
+df_woriginal_party <- df_implement_switches %>% 
+  select(-party) %>% 
+  inner_join(party_switches_original_parties, by = c("diputado_id"="id_diputado" )) %>% 
+  rename(party = original_party)
+
+# Put the party changes
+
+df_woriginal_party
+party_switches_long_ready
+
+  # Make fuzzy match betwen dataframes
+  fuzzy_date_match <- fuzzy_left_join(
+    df_woriginal_party, party_switches_long_ready,
+    by = c(
+      "diputado_id" = "id_diputado",
+      "date" = "start_date",
+      "date" = "end_date"
+    ),
+    match_fun = list(`>=`, `<=`) )
+
+
+
+
+
 
 # Save political affiliation w_time
 saveRDS(political_affiliation_wtime,'./scraped_data/political_affiliation_wtime.rds')

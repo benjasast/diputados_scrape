@@ -8,6 +8,12 @@ output: html_document
 # Libraries
 library(tidyverse)
 library(kableExtra)
+library(lubridate)
+
+library(tidygraph)
+library(ggraph)
+
+
 
 # remove objects
 rm(list=ls())
@@ -92,8 +98,12 @@ vote_info_custom <- vote_info %>%
                                 quorum %in% c('1/3','2/3 PRESENTES','3/5') ~ 'OTRO' )  )
 
 summary_votes <- vote_info_custom %>% 
+  filter(quorum_agg!="OTRO") %>% 
   group_by(quorum_agg,year) %>% 
   summarise(per_aprobado = mean(vote_apobado, na.rm = TRUE))
+
+
+# REVISAR APROBACIONES EN 2002
 
 summary_votes %>% 
   ggplot(aes(year,per_aprobado)) +
@@ -101,7 +111,8 @@ summary_votes %>%
   geom_point(aes(color=quorum_agg)) +
   theme(legend.position="bottom") +
   scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
-  ggtitle('Proporcion votaciones aprobadas por año y quorum')
+  facet_wrap(~quorum_agg) +
+  ggtitle('Proporcion votaciones aprobadas por año y quorum') 
 
 
 ```
@@ -171,12 +182,111 @@ summary_rel_inter %>%
 
 summary_rel_inter %>% 
   filter(var=="Prop. votan distinto") %>% 
+  filter(rel_party!="Same Party") %>% 
   ggplot(aes(year,value)) +
   geom_line() +
   geom_point() +
   facet_wrap(~rel_party) +
   scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   ggtitle("Prop. votos desacuerdo para parejas Inter-coalición")
+
+
+
+```
+
+
+```{r graph_data_prep}
+
+# Edges
+edges <- net_data %>% 
+  select(dip_1,dip_2,year,n_same_bothpresent,n_opposite_bothpresent,rel_coalition_gen) %>% 
+  transmute(to = dip_1,
+         from = dip_2,
+         weight = n_same_bothpresent,
+         weigh2 = n_opposite_bothpresent,
+         year=year,
+         type_vote = rel_coalition_gen)
+
+
+
+# Trial - only past median
+edges <- edges %>% 
+  filter(year==2014)
+
+median <- edges %>% 
+  summarise(median = median(weight, na.rm = TRUE))
+
+edges_sel <- edges %>% 
+  filter(weight>median$median) %>% 
+  mutate(to = str_c('d',to),
+         from = str_c('d',from))
+
+
+# Nodes to use
+sel_nodes <- c(edges$to,edges$from)
+
+readRDS('./scraped_data/political_affiliation_wtime.rds') %>% 
+  select(party) %>% 
+  distinct()
+
+
+# Nodes
+nodes <- readRDS('./scraped_data/political_affiliation_wtime.rds') %>% 
+  mutate(year = year(date)) %>% 
+  group_by(diputado_id,year) %>% 
+  filter(row_number()==1) %>% 
+  ungroup() %>% 
+  filter(diputado_id %in% sel_nodes) %>% 
+  select(-date,-aux,-bancada,-region,-comunas) %>% 
+  transmute(id = str_c('d',diputado_id),
+         party = party,
+         year = year) 
+
+network_graph <- tbl_graph(nodes = nodes,
+                           edges = edges_sel,
+                           directed = FALSE,
+                           node_key = "id")
+
+network_graph2 <- network_graph %>% 
+  filter(!node_is_isolated()) %>% 
+  activate(nodes) %>% 
+  mutate(degree  = centrality_degree())
+
+# Set color for nodes
+node_colors <- readxl::read_xlsx('./scraped_data/table_party_colors.xlsx')
+
+myColors <- node_colors$color
+names(myColors) <- node_colors$party
+colScale <- scale_colour_manual(name = "party",values = myColors)
+
+edges_sel %>% 
+  select(type_vote) %>% 
+  distinct()
+
+# Set color for edges
+myColors_edges <- c('Cross coalition', 'Same coalition', 'Independent present')
+names(myColors_edges) <- c('#ffc6c4', '#c0c0c0', '#00FFFFFF')
+colScale_edges <- scale_colour_manual(name = "type_vote",values = myColors_edges)
+
+library(ggnewscale)
+
+
+ggraph(network_graph2, layout = "fr",weights=weight  ) + 
+    geom_node_point(aes(color = party, size=degree)) +
+    geom_edge_link(aes(color=type_vote),alpha=0.08) +
+    #geom_edge_density(aes(fill = weight)) +
+    colScale +
+    scale_edge_colour_manual(values = c('#f21212','#fbf8f8','#0d0c0c') ) +
+    scale_size_continuous(range = c(3,6)) +
+  theme(panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank()) 
+
+
+
+
+
 
 
 

@@ -16,6 +16,8 @@ library(furrr)
 library(lubridate)
 library(fuzzyjoin)
 
+
+
 rm(list=ls())
 
 
@@ -23,6 +25,10 @@ rm(list=ls())
 
 # political affiliation
 political_affiliation <- readRDS('./scraped_data/political_affiliation_wtime.rds')
+
+political_affiliation %>% 
+  select(party) %>% 
+  distinct()
 
 # Pair membership
 pair_membership <- readRDS('./scraped_data/table_pair_membership.rds')
@@ -181,41 +187,6 @@ network_data_wpairmembership <- network_data_waffiliation %>%
 # Export network data by year ---------------------------------------------
 
 saveRDS(network_data_wpairmembership,'table_network_by_year.rds')
-
-  
-  
-  
-# Votes in agreement all present
-votes_by_coal <- network_data %>% 
-  group_by(pair_coalition, year) %>% 
-  summarise(mean_same = mean(n_same_bothpresent, na.rm = TRUE),
-            mean_opp = mean(n_opposite_bothpresent, na.rm = TRUE))
-
-votes_by_coal %>% 
-  ggplot(aes(year,mean_same)) +
-  geom_line(aes(color=pair_coalition)) +
-  geom_point(aes(color=pair_coalition)) +
-  ggtitle("Votos de acuerdo")
-  
-votes_by_coal %>% 
-  ggplot(aes(year,mean_opp)) +
-  geom_line(aes(color=pair_coalition)) +
-  geom_point(aes(color=pair_coalition)) +
-  ggtitle("Votos desacuerdo")
-
-
-
-
-results_2018$network$n_same_bothpresent %>% mean(na.rm=TRUE)
-results_2019$network$n_same_bothpresent %>% mean(na.rm=TRUE)
-results_2020$network$n_same_bothpresent %>% mean(na.rm=TRUE)
-
-
-results_2018$network %>% 
-  group_by(pair_coalition) %>% 
-  summarise(mean_same = mean(n_same_total, na.rm = TRUE),
-            mean_opp = mean(n_opposite_total, na.rm = TRUE))
-
 
 
 
