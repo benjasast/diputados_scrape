@@ -148,11 +148,10 @@ summary_votes %>%
 
 ```{r porcentaje_votos_acuerdo_same_party_pairs}
 
-summary_rel_same_party <- net_data %>% 
+summary_rel_same_party <- net_data_ready %>% 
   filter(party1==party2) %>% 
   filter(party1!='Independientes') %>% 
-  filter(party1!='Federación Regionalista Verde Social') %>% 
-  group_by(year,party1,party2) %>% 
+  group_by(legislative_semester_date,party1,party2) %>% 
   summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
             `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
             `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
@@ -160,11 +159,11 @@ summary_rel_same_party <- net_data %>%
 
 summary_rel_same_party %>% 
   filter(var=="Prop. votan igual") %>% 
-  ggplot(aes(year,value)) +
+  ggplot(aes(legislative_semester_date,value)) +
   geom_line() +
   geom_point() +
   facet_wrap(~party1) +
-  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   ggtitle("Prop. votos de acuerdo para parejas del mismo partido")
   
 ```
@@ -173,11 +172,11 @@ summary_rel_same_party %>%
 
 summary_rel_same_party %>% 
   filter(var=="Prop. votan distinto") %>% 
-  ggplot(aes(year,value)) +
+  ggplot(aes(legislative_semester_date,value)) +
   geom_line() +
   geom_point() +
   facet_wrap(~party1) +
-  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   ggtitle("Prop. votos desacuerdo para parejas del mismo partido")
 
 ```
@@ -185,9 +184,9 @@ summary_rel_same_party %>%
 
 ```{r Proporcion votos de acuerdo - grupos inter}
 
-summary_rel_inter <- net_data %>% 
+summary_rel_inter <- net_data_ready %>% 
   filter(!is.na(rel_party)) %>% 
-  group_by(year,rel_party) %>% 
+  group_by(legislative_semester_date,rel_party) %>% 
   summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
             `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
             `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
@@ -195,11 +194,12 @@ summary_rel_inter <- net_data %>%
 
 summary_rel_inter %>% 
   filter(var=="Prop. votan igual") %>% 
-  ggplot(aes(year,value)) +
+  filter(rel_party!="Same Party") %>% 
+  ggplot(aes(legislative_semester_date,value)) +
   geom_line() +
   geom_point() +
   facet_wrap(~rel_party) +
-  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   ggtitle("Prop. votos de acuerdo para parejas Inter-coalición")
 
 
@@ -211,50 +211,12 @@ summary_rel_inter %>%
 summary_rel_inter %>% 
   filter(var=="Prop. votan distinto") %>% 
   filter(rel_party!="Same Party") %>% 
-  ggplot(aes(year,value)) +
+  ggplot(aes(legislative_semester_date,value)) +
   geom_line() +
   geom_point() +
   facet_wrap(~rel_party) +
-  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   ggtitle("Prop. votos desacuerdo para parejas Inter-coalición")
-
-
-
-```
-
-
-```{r graph_data_prep}
-
-# Edges
-edges <- net_data %>% 
-  select(dip_1,dip_2,year,n_same_bothpresent) %>% 
-  transmute(to = dip_1,
-         from = dip_2,
-         weight = n_same_bothpresent,
-         year=year)
-
-# Nodes
-nodes <- readRDS('./scraped_data/political_affiliation_wtime.rds') %>% 
-  mutate(year = year(date)) %>% 
-  group_by(diputado_id,year) %>% 
-  filter(row_number()==1) %>% 
-  ungroup() %>% 
-  select(-date,-aux,-bancada,-region,-comunas) %>% 
-  transmute(id = diputado_id,
-         party = party,
-         year = year)
-  
-
-# Graph
-tidy_network <- tbl_graph(nodes = nodes, 
-                         edges = edges, 
-                         directed = FALSE)
-
-ggraph(tidy_network, layout = "graphopt") + 
-  geom_edge_link() + 
-  geom_node_point() + 
-  theme_graph()
-
 
 
 

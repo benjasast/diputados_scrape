@@ -1,0 +1,111 @@
+---
+title: "p04_master_network_viz"
+output: html_document
+---
+
+```{r libraries and data}
+library(tidyverse)
+library(kableExtra)
+library(lubridate)
+
+library(igraph)
+library(tidygraph)
+library(ggraph)
+
+rm(list=ls())
+
+
+# Load data
+net_data <- readRDS('table_network_by_year_month.rds')
+
+# Get data ready
+net_data_ready <- net_data %>% 
+  mutate(legislative_year = case_when(month(year_month) %in% c(1,2) ~ year(year_month)-1,
+                                      !month(year_month) %in% c(1,2) ~ year(year_month)),
+         legislative_semester = case_when(month(year_month) %in% c(3,4,5,6,7,8) ~ 1,
+                                          month(year_month) %in% c(9,10,11,12,1,2) ~ 2 ),
+         legislative_semester_date = case_when(
+           legislative_semester==1 ~ str_c(legislative_year,'01-01') %>% as_date(),
+           legislative_semester==2 ~ str_c(legislative_year,'06-01') %>% as_date()
+         ) )
+
+
+# Nodes
+nodes <- readRDS('./scraped_data/political_affiliation_wtime.rds') %>% 
+  mutate(legislative_year = case_when(month(date) %in% c(1,2) ~ year(date)-1,
+                                      !month(date) %in% c(1,2) ~ year(date) ) ) %>% 
+  group_by(diputado_id,legislative_year) %>% 
+  filter(row_number()==1) %>% 
+  ungroup() %>% 
+  select(-date,-aux,-bancada,-region,-comunas) %>% 
+  transmute(id = diputado_id,
+         party = party,
+         year = legislative_year)
+
+
+```
+
+```{r visualization}
+# Graph
+
+edges <- net_data_ready %>% 
+  select(dip_1,dip_2,legislative_year,n_same_bothpresent,n_opposite_bothpresent,rel_coalition_gen) %>% 
+  transmute(to = dip_1,
+         from = dip_2,
+         weight = n_same_bothpresent,
+         weigh2 = n_opposite_bothpresent,
+         year=legislative_year,
+         type_vote = rel_coalition_gen)
+
+# Select specific year and only edges above median
+edges_sel <- edges %>% 
+  filter(year==2002) %>% 
+  filter(weight>median(weight, na.rm = TRUE)) %>% 
+    mutate(to = str_c('d',to),
+         from = str_c('d',from))
+
+# Nodes to use
+sel_nodes <- c(edges_sel$to,edges_sel$from) %>% 
+  as_tibble() %>% 
+  distinct() %>% 
+  rename(id = value)
+
+# Get the info for the nodes
+nodes_sel <- nodes %>% 
+  mutate(id = str_c('d',id) ) %>% 
+  inner_join(sel_nodes)
+
+network_graph <- tbl_graph(nodes = nodes_sel,
+                           edges = edges_sel,
+                           directed = FALSE,
+                           node_key = "id")
+
+network_graph2 <- network_graph %>% 
+  filter(!node_is_isolated()) %>% 
+  activate(nodes) %>% 
+  mutate(degree  = centrality_degree())
+
+
+# Set color for nodes
+node_colors <- readxl::read_xlsx('./scraped_data/table_party_colors.xlsx')
+myColors <- node_colors$color
+names(myColors) <- node_colors$party
+colScale <- scale_colour_manual(name = "party",values = myColors)
+
+
+# Create graph
+ggraph(network_graph2, layout = "fr",weights=weight  ) + 
+    geom_node_point(aes(color = party, size=degree)) +
+    geom_edge_link(aes(color=type_vote),alpha=0.08) +
+    #geom_edge_density(aes(fill = weight)) +
+    colScale +
+    scale_edge_colour_manual(values = c('#f21212','#fbf8f8','#0d0c0c') ) +
+    scale_size_continuous(range = c(3,6)) +
+  theme(panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank()) 
+
+
+```
+
