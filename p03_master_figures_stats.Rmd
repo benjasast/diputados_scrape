@@ -71,8 +71,8 @@ summary_rel_coalition_gen %>%
 
 ```{r Promedio votos de acuerdo por coalition-mix}
 
-summary_rel_coalition <- net_data %>% 
-  group_by(year,rel_coalition) %>% 
+summary_rel_coalition <- net_data_ready %>% 
+  group_by(legislative_semester_date,rel_coalition) %>% 
   summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
             `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
             `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
@@ -82,11 +82,11 @@ summary_rel_coalition <- net_data %>%
 summary_rel_coalition %>% 
   filter(var=="Prop. votan igual") %>% 
   filter(rel_coalition!="Independent present") %>% 
-  ggplot(aes(year,value)) +
+  ggplot(aes(legislative_semester_date,value)) +
   geom_line(aes(color = rel_coalition)) +
   geom_point(aes(color = rel_coalition)) +
   theme(legend.position="bottom") +
-  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   ggtitle('Promedio de porcentaje de votos de acuerdo para distintos tipos de pareja')
 
 
@@ -97,11 +97,11 @@ summary_rel_coalition %>%
 summary_rel_coalition %>% 
   filter(var=="Prop. votan distinto") %>% 
   filter(rel_coalition!="Independent present") %>% 
-  ggplot(aes(year,value)) +
+  ggplot(aes(legislative_semester_date,value)) +
   geom_line(aes(color = rel_coalition)) +
   geom_point(aes(color = rel_coalition)) +
   theme(legend.position="bottom") +
-  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   ggtitle('Promedio de porcentaje de votos en desacuerdo para distintos tipos de pareja')
 
 
@@ -112,25 +112,33 @@ summary_rel_coalition %>%
 ```{r numero de votaciones aprobadas/no aprobadas por quorum}
 
 vote_info_custom <- vote_info %>% 
-  mutate(vote_apobado = (resultado %in% c('APROBADO','UNANIME')),
-         quorum_agg = case_when(quorum %in% c('QUORUM CALIFICADO','QUORUM SIMPLE','LEY ORGANICA CONSTITUCIONAL') ~ quorum,
-                                quorum %in% c('REFORMA CONSTITUCIONAL 2/3','REFORMA CONSTITUCIONAL 3/5') ~ 'REFORMA CONSTITUCIONAL 2/3 o 3/5' ,
-                                quorum %in% c('1/3','2/3 PRESENTES','3/5') ~ 'OTRO' )  )
+  mutate(quorum_agg = case_when(quorum %in% c('QUORUM CALIFICADO','QUORUM SIMPLE') ~ quorum,
+                                quorum %in% c('LEY ORGANICA CONSTITUCIONAL','REFORMA CONSTITUCIONAL 2/3','REFORMA CONSTITUCIONAL 3/5') ~ 'LOC o REFORMAS CONSTITUCIONALES' ,
+                                quorum %in% c('1/3','2/3 PRESENTES','3/5') ~ 'OTRO' )  ) %>% 
+  mutate_at(vars(starts_with("total")),~as.double(.)) %>% 
+  mutate(vote_apruebo = case_when(quorum=="QUORUM SIMPLE" & total_afir>total_neg ~ 1,
+    quorum=="QUORUM CALIFICADO" & total_afir>120*(1/2) ~ 1,
+    quorum=="LEY ORGANICA CONSTITUCIONAL" & total_afir>120*(4/7) ~ 1,
+    quorum=="REFORMA CONSTITUCIONAL 2/3" & total_afir>120 * (2/3) ~1,
+    quorum=="REFORMA CONSTITUCIONAL 3/5" & total_afir>120 * (3/5) ~1,
+    quorum=="1/3" & total_afir>total_neg ~ 1, # this label is a mistake (min for session)
+    quorum=="2/3 PRESENTES" & total_afir> (total_afir+total_neg+total_abs)*(2/3) ~1,
+    quorum=="3/5" & total_afir>120* (3/5) ~ 1 )) %>% 
+  mutate(vote_apruebo = ifelse(is.na(vote_apruebo),0,1))
+
 
 summary_votes <- vote_info_custom %>% 
   filter(quorum_agg!="OTRO") %>% 
-  group_by(quorum_agg,year) %>% 
-  summarise(per_aprobado = mean(vote_apobado, na.rm = TRUE))
+  group_by(quorum_agg,legislative_semester_date) %>% 
+  summarise(per_aprobado = mean(vote_apruebo, na.rm = TRUE))
 
-
-# REVISAR APROBACIONES EN 2002
 
 summary_votes %>% 
-  ggplot(aes(year,per_aprobado)) +
+  ggplot(aes(legislative_semester_date,per_aprobado)) +
   geom_line(aes(color=quorum_agg)) +
   geom_point(aes(color=quorum_agg)) +
   theme(legend.position="bottom") +
-  scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
+  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   facet_wrap(~quorum_agg) +
   ggtitle('Proporcion votaciones aprobadas por año y quorum') 
 
