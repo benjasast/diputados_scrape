@@ -16,6 +16,8 @@ library(xml2)
 library(furrr)
 library(rlist)
 library(lubridate)
+library(fuzzyjoin)
+
 
 rm(list=ls())
 
@@ -102,6 +104,7 @@ diputado_id_list <- vote_detail_table_clean %>%
   mutate(diputado_id = diputado_id %>% as.double()) %>% 
   distinct()
 
+
 # Check they all have information - and pivot wider
 political_affiliation_raw <- political_affiliation %>% 
   rename(diputado_id = DIPID)  %>% 
@@ -146,6 +149,7 @@ party_switches_long <- party_switches_raw %>%
                names_pattern = "(.+)_(.+)" ) %>% 
   na.omit()
 
+
 # Create intervals (for party membership)
 party_switches_long_ready <- party_switches_long %>% 
   arrange(id_diputado,date) %>% 
@@ -154,12 +158,11 @@ party_switches_long_ready <- party_switches_long %>%
   mutate(end_date = ifelse(is.na(end_date),as_date('2025-01-01'),end_date) %>% as_date()) %>%  # Add fake end date for unique casee
   rename(start_date = date) %>% 
   select(id_diputado, party, start_date, end_date)
-  
+
 # Extract data for original parties (use for inputting original party) -- as current information is scrapped as last party
 party_switches_original_parties <- party_switches_raw %>% 
   select(id_diputado,original_party) %>% 
   distinct()
-
 
 
 # Introduce switches ------------------------------------------------------
@@ -167,7 +170,6 @@ party_switches_original_parties <- party_switches_raw %>%
 # Keep only guys with switches
 df_implement_switches <- political_affiliation_wtime %>% 
   filter(diputado_id %in% party_switches_original_parties$id_diputado)
-
 
 # Put the original party (as starting point)
 df_woriginal_party <- df_implement_switches %>% 
@@ -177,10 +179,7 @@ df_woriginal_party <- df_implement_switches %>%
 
 # Put the party changes
 
-df_woriginal_party
-party_switches_long_ready
-
-  # Make fuzzy match betwen dataframes
+# Make fuzzy match betwen dataframes
   fuzzy_date_match <- fuzzy_left_join(
     df_woriginal_party, party_switches_long_ready,
     by = c(
@@ -188,15 +187,23 @@ party_switches_long_ready
       "date" = "start_date",
       "date" = "end_date"
     ),
-    match_fun = list(`>=`, `<=`) )
+    match_fun = list(`==`,`>=`, `<=`) )
+  
+
+# Grab the neccesary changes
+data_to_input <- fuzzy_date_match %>% 
+  mutate(party = ifelse(is.na(party.y),party.x,party.y) ) %>% 
+  select(-party.x,-party.y,-id_diputado,-start_date,-end_date)
 
 
-
-
+# Final party affiliation data
+political_affiliation_wtime_final <- political_affiliation_wtime %>% 
+  anti_join(df_implement_switches, by = "diputado_id") %>% 
+  union_all(data_to_input)
 
 
 # Save political affiliation w_time
-saveRDS(political_affiliation_wtime,'./scraped_data/political_affiliation_wtime.rds')
+saveRDS(political_affiliation_wtime_final,'./scraped_data/political_affiliation_wtime.rds')
 
 # Coalitions data --------------------------------------------------------------
 
@@ -206,7 +213,7 @@ fa <- 'Frente Amplio'
 ind <- 'Independientes'
 
 # Political coalitions in period 9
-political_coalitions_p9 <- tribble(~party, ~coalition,
+political_coalitions <- tribble(~party, ~coalition,
   'Renovación Nacional', alianza,
   'Unión Demócrata Independiente',alianza,
   'Independientes',ind,
@@ -216,6 +223,7 @@ political_coalitions_p9 <- tribble(~party, ~coalition,
   'Partido Por la Democracia',concertacion,
   'Revolución Democrática',fa,
   'Evolución Política',alianza,
+  'Partido Regionalista Independiente', alianza,
   'Partido Convergencia Social',fa,
   'Partido Radical de Chile',concertacion,
   'Federación Regionalista Verde Social',ind,
@@ -223,10 +231,14 @@ political_coalitions_p9 <- tribble(~party, ~coalition,
   'Partido Humanista',fa,
   'Partido Liberal de Chile',fa,
   'Partido Ecologista Verde',fa,
-  'Partido Republicano',ind)
+  'Partido Republicano',ind,
+  'Partido Izquierda Ciudadana', fa,
+  'Movimiento Amplio Social', ind,
+  'Partido Amplitud', ind)
+
 
 # Save data
-saveRDS(political_coalitions_p9,'./scraped_data/p9_coalitions_info.rds')
+saveRDS(political_coalitions,'./scraped_data/p9_coalitions_info.rds')
 
 
 # Pair membership data ----------------------------------------------------

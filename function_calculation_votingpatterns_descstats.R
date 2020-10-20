@@ -30,8 +30,10 @@ vote_pattern_normalized <- vote_pattern %>%
 output <- vote_pattern_normalized
 
 # Save output
-filename <- str_c('./scraped_data/network_n_stats_',split_name,'.rds')
-saveRDS(output,filename)
+if (!missing(split_name)) {
+  filename <- str_c('./scraped_data/network_n_stats_',split_name,'.rds')
+  saveRDS(output,filename)
+}
 
 # Return
 output

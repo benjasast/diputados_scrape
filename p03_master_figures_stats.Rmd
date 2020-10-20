@@ -19,11 +19,31 @@ library(ggraph)
 rm(list=ls())
 
 # Load data
-net_data <- readRDS('table_network_by_year.rds')
+net_data <- readRDS('table_network_by_year_month.rds')
+
+# Get data ready
+net_data_ready <- net_data %>% 
+  mutate(legislative_year = case_when(month(year_month) %in% c(1,2) ~ year(year_month)-1,
+                                      !month(year_month) %in% c(1,2) ~ year(year_month)),
+         legislative_semester = case_when(month(year_month) %in% c(3,4,5,6,7,8) ~ 1,
+                                          month(year_month) %in% c(9,10,11,12,1,2) ~ 2 ),
+         legislative_semester_date = case_when(
+           legislative_semester==1 ~ str_c(legislative_year,'01-01') %>% as_date(),
+           legislative_semester==2 ~ str_c(legislative_year,'06-01') %>% as_date()
+         ) )
+
 
 vote_info <- readRDS('./scraped_data/table_vote_information.rds') %>% 
   mutate(fecha = as.Date(fecha),
-         year = year(fecha))
+         year = year(fecha)) %>% 
+    mutate(legislative_year = case_when(month(fecha) %in% c(1,2) ~ year(fecha)-1,
+                                      !month(fecha) %in% c(1,2) ~ year(fecha)),
+         legislative_semester = case_when(month(fecha) %in% c(3,4,5,6,7,8) ~ 1,
+                                          month(fecha) %in% c(9,10,11,12,1,2) ~ 2 ),
+         legislative_semester_date = case_when(
+           legislative_semester==1 ~ str_c(legislative_year,'01-01') %>% as_date(),
+           legislative_semester==2 ~ str_c(legislative_year,'06-01') %>% as_date()
+         ) )
 
 ```
 
@@ -31,17 +51,17 @@ vote_info <- readRDS('./scraped_data/table_vote_information.rds') %>%
 # Cuanto votan de acuerdo las parejas de diputados?
 ```{r overall_votes_in_agreement}
 
-summary_rel_coalition_gen <- net_data %>% 
-  group_by(year) %>% 
+summary_rel_coalition_gen <- net_data_ready %>% 
+  group_by(legislative_semester_date) %>% 
   summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
             `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
             `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
   pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
 
 summary_rel_coalition_gen %>% 
-  ggplot(aes(year,value, fill=var)) +
+  ggplot(aes(legislative_semester_date,value, fill=var)) +
   geom_bar(stat= "identity") +
-  scale_x_continuous(breaks = seq(2002, 2020, by = 2)) +
+  #scale_x_continuous(breaks = seq(2002, 2020, by = 2)) +
   ggtitle("Cuanto votan de acuerdo las parejas de diputados?")
 
 
@@ -199,36 +219,11 @@ summary_rel_inter %>%
 
 # Edges
 edges <- net_data %>% 
-  select(dip_1,dip_2,year,n_same_bothpresent,n_opposite_bothpresent,rel_coalition_gen) %>% 
+  select(dip_1,dip_2,year,n_same_bothpresent) %>% 
   transmute(to = dip_1,
          from = dip_2,
          weight = n_same_bothpresent,
-         weigh2 = n_opposite_bothpresent,
-         year=year,
-         type_vote = rel_coalition_gen)
-
-
-
-# Trial - only past median
-edges <- edges %>% 
-  filter(year==2014)
-
-median <- edges %>% 
-  summarise(median = median(weight, na.rm = TRUE))
-
-edges_sel <- edges %>% 
-  filter(weight>median$median) %>% 
-  mutate(to = str_c('d',to),
-         from = str_c('d',from))
-
-
-# Nodes to use
-sel_nodes <- c(edges$to,edges$from)
-
-readRDS('./scraped_data/political_affiliation_wtime.rds') %>% 
-  select(party) %>% 
-  distinct()
-
+         year=year)
 
 # Nodes
 nodes <- readRDS('./scraped_data/political_affiliation_wtime.rds') %>% 
@@ -236,56 +231,21 @@ nodes <- readRDS('./scraped_data/political_affiliation_wtime.rds') %>%
   group_by(diputado_id,year) %>% 
   filter(row_number()==1) %>% 
   ungroup() %>% 
-  filter(diputado_id %in% sel_nodes) %>% 
   select(-date,-aux,-bancada,-region,-comunas) %>% 
-  transmute(id = str_c('d',diputado_id),
+  transmute(id = diputado_id,
          party = party,
-         year = year) 
+         year = year)
+  
 
-network_graph <- tbl_graph(nodes = nodes,
-                           edges = edges_sel,
-                           directed = FALSE,
-                           node_key = "id")
+# Graph
+tidy_network <- tbl_graph(nodes = nodes, 
+                         edges = edges, 
+                         directed = FALSE)
 
-network_graph2 <- network_graph %>% 
-  filter(!node_is_isolated()) %>% 
-  activate(nodes) %>% 
-  mutate(degree  = centrality_degree())
-
-# Set color for nodes
-node_colors <- readxl::read_xlsx('./scraped_data/table_party_colors.xlsx')
-
-myColors <- node_colors$color
-names(myColors) <- node_colors$party
-colScale <- scale_colour_manual(name = "party",values = myColors)
-
-edges_sel %>% 
-  select(type_vote) %>% 
-  distinct()
-
-# Set color for edges
-myColors_edges <- c('Cross coalition', 'Same coalition', 'Independent present')
-names(myColors_edges) <- c('#ffc6c4', '#c0c0c0', '#00FFFFFF')
-colScale_edges <- scale_colour_manual(name = "type_vote",values = myColors_edges)
-
-library(ggnewscale)
-
-
-ggraph(network_graph2, layout = "fr",weights=weight  ) + 
-    geom_node_point(aes(color = party, size=degree)) +
-    geom_edge_link(aes(color=type_vote),alpha=0.08) +
-    #geom_edge_density(aes(fill = weight)) +
-    colScale +
-    scale_edge_colour_manual(values = c('#f21212','#fbf8f8','#0d0c0c') ) +
-    scale_size_continuous(range = c(3,6)) +
-  theme(panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.border = element_blank(),
-    panel.background = element_blank()) 
-
-
-
-
+ggraph(tidy_network, layout = "graphopt") + 
+  geom_edge_link() + 
+  geom_node_point() + 
+  theme_graph()
 
 
 
