@@ -43,13 +43,17 @@ nodes <- readRDS('./scraped_data/political_affiliation_wtime.rds') %>%
          year = legislative_year)
 
 
-```
-
-```{r visualization}
-# Graph
-
+# Convert to yearly information - monthly currently
 edges <- net_data_ready %>% 
-  select(dip_1,dip_2,legislative_year,n_same_bothpresent,n_opposite_bothpresent,rel_coalition_gen) %>% 
+  select(dip_1,dip_2,n_same,n_opposite,votaciones_both_present,legislative_year,rel_coalition_gen) %>% 
+  group_by(dip_1,dip_2,legislative_year) %>% 
+  summarise(n_same = sum(n_same),
+            n_opposite = sum(n_opposite),
+            votaciones_both_present = sum(votaciones_both_present),
+            rel_coalition_gen = last(rel_coalition_gen)) %>% 
+  ungroup() %>% 
+  mutate(n_same_bothpresent = n_same/votaciones_both_present,
+         n_opposite_bothpresent = n_opposite/votaciones_both_present) %>% 
   transmute(to = dip_1,
          from = dip_2,
          weight = n_same_bothpresent,
@@ -57,15 +61,37 @@ edges <- net_data_ready %>%
          year=legislative_year,
          type_vote = rel_coalition_gen)
 
-# Select specific year and only edges above median
+
+
+```
+
+```{r visualization}
+# Graph
+
+# Color variables:
+'https://stackoverflow.com/questions/55995393/selectively-color-size-nodes-in-ggraph'
+
+# Select specific year and only edges above median. Create coloring variables
 edges_sel <- edges %>% 
   filter(year==2002) %>% 
   filter(weight>median(weight, na.rm = TRUE)) %>% 
     mutate(to = str_c('d',to),
-         from = str_c('d',from))
+         from = str_c('d',from)) %>% 
+    filter(weight>median(weight, na.rm = TRUE))
+
+quantiles <- quantile(edges_sel$weight)
+  
+# Add quantiles to data
+edges_sel2 <- edges_sel %>% 
+  mutate(quantile = case_when( weight < quantiles[[3]] ~ "sub-p50",
+                               ( weight>= quantiles[[3]] ) &  (weight<quantiles[[4]]) ~ "p50",
+                               weight>= quantiles[[4]] ~ "p75") ) %>% 
+  mutate(quantile = ifelse(type_vote =="Cross coalition","Cross coalition", quantile) ) %>%  
+  mutate(quantile = factor(quantile, levels = c("sub-p50","p50","p75","Cross coalition")))
+
 
 # Nodes to use
-sel_nodes <- c(edges_sel$to,edges_sel$from) %>% 
+sel_nodes <- c(edges_sel2$to,edges_sel2$from) %>% 
   as_tibble() %>% 
   distinct() %>% 
   rename(id = value)
@@ -75,15 +101,25 @@ nodes_sel <- nodes %>%
   mutate(id = str_c('d',id) ) %>% 
   inner_join(sel_nodes)
 
+# Create graph and consolidate pairs (to,from can be inverted from month to month)
 network_graph <- tbl_graph(nodes = nodes_sel,
-                           edges = edges_sel,
+                           edges = edges_sel2,
                            directed = FALSE,
-                           node_key = "id")
+                           node_key = "id") %>% 
+  activate(edges) %>% 
+  mutate(temp = ifelse(from > to, paste0(to, from), paste0(from, to))) %>% 
+    group_by(temp) %>% 
+    mutate(weight = sum(weight)) %>% 
+    ungroup() %>% 
+    dplyr::distinct(temp, .keep_all = TRUE) %>% 
+    select(-temp)
+  
 
 network_graph2 <- network_graph %>% 
-  filter(!node_is_isolated()) %>% 
   activate(nodes) %>% 
+  filter(!node_is_isolated()) %>% 
   mutate(degree  = centrality_degree())
+
 
 
 # Set color for nodes
@@ -96,15 +132,17 @@ colScale <- scale_colour_manual(name = "party",values = myColors)
 # Create graph
 ggraph(network_graph2, layout = "fr",weights=weight  ) + 
     geom_node_point(aes(color = party, size=degree)) +
-    geom_edge_link(aes(color=type_vote),alpha=0.08) +
+    geom_edge_link(aes(color=quantile),alpha=0.08) +
     #geom_edge_density(aes(fill = weight)) +
     colScale +
-    scale_edge_colour_manual(values = c('#f21212','#fbf8f8','#0d0c0c') ) +
+    scale_edge_colour_manual(values = c('#000000','#4c4c4c','#cccccc','#dc143C') ) +
     scale_size_continuous(range = c(3,6)) +
   theme(panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     panel.border = element_blank(),
     panel.background = element_blank()) 
+
+
 
 
 ```
