@@ -27,10 +27,13 @@ rm(list=ls())
 
 vote_details_02_20 <- readRDS('./scraped_data/vote_info_02_18.rds')
 vote_details_18_20 <- readRDS('./scraped_data/vote_info_18_20.rds')
+vote_details_extra_20 <- readRDS('./scraped_data/votacion_detalle_34327_34652.rds')
+
 
 # Put all votacion detalle together
 vote_details <- vote_details_02_20 %>% 
-  union_all(vote_details_18_20)
+  union_all(vote_details_18_20) %>% 
+  union_all(vote_details_extra_20)
 
 
 # Extract vote information ------------------------------------------------
@@ -43,20 +46,25 @@ grab_vote_information <- function(index){
 vote_information_table <- map(1:length(vote_details),grab_vote_information) %>% 
   reduce(union_all)
 
+
 # Clean sesion - only the relevant stuff: we have multiple values
 clean_sesion <- vote_information_table %>% 
   filter(variable=="sesion") %>% 
   filter(grepl('^\\d{4}$',value))
 
-# Keep only the sessions that are worth it
+# Keep only the sessions that have values -- distinct as I had overlap of one vote between update and historical
 vote_information_table_clean <- vote_information_table %>% 
   filter(variable!="sesion") %>% 
   union_all(clean_sesion) %>% 
-  select(-index)
+  select(-index) %>% 
+  distinct()
+
+
 
 # Pivot data wider
 vote_information_table_wide <- vote_information_table_clean %>% 
   pivot_wider(names_from = variable,values_from = value)
+
 
 # Export table
 saveRDS(vote_information_table_wide,'./scraped_data/table_vote_information.rds')
@@ -72,13 +80,16 @@ grab_vote_detail <- function(index){
 vote_detail_table <- map(1:length(vote_details),grab_vote_detail) %>% 
   reduce(union_all)
 
-# mutate vote to factor variable
+# mutate vote to factor variable: distinct because of overlap update and historical
 vote_detail_table_clean <- vote_detail_table %>% 
-  mutate(vote = as_factor(vote))
+  mutate(vote = as_factor(vote)) %>% 
+  distinct()
+
 
 # Pivot wider
 vote_detail_table_wide <- vote_detail_table_clean %>% 
   pivot_wider(names_from = diputado_id,values_from = vote)
+
 
 # Save
 saveRDS(vote_detail_table_wide,'./scraped_data/table_vote_details.rds')

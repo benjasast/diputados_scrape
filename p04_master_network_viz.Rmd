@@ -11,9 +11,16 @@ library(lubridate)
 library(igraph)
 library(tidygraph)
 library(ggraph)
+library(furrr)
+
+library(svglite)
+library(ggpubr)
+library(graphlayouts)
+
 
 rm(list=ls())
 
+set.seed(123)
 
 # Load data
 net_data <- readRDS('table_network_by_year_month.rds')
@@ -62,88 +69,354 @@ edges <- net_data_ready %>%
          type_vote = rel_coalition_gen)
 
 
-
 ```
 
-```{r visualization}
-# Graph
 
-# Color variables:
-'https://stackoverflow.com/questions/55995393/selectively-color-size-nodes-in-ggraph'
 
-# Select specific year and only edges above median. Create coloring variables
-edges_sel <- edges %>% 
-  filter(year==2002) %>% 
-  filter(weight>median(weight, na.rm = TRUE)) %>% 
-    mutate(to = str_c('d',to),
-         from = str_c('d',from)) %>% 
-    filter(weight>median(weight, na.rm = TRUE))
+```{r grab legend}
 
-quantiles <- quantile(edges_sel$weight)
+ # Select specific year and only edges above median. Create coloring variables
+    edges_sel <- edges %>% 
+        mutate(to = str_c('d',to),
+             from = str_c('d',from))
+
+    # Add quantiles to data
+    edges_sel2 <- edges_sel
+    
+    # Nodes to use
+    sel_nodes <- c(edges_sel2$to,edges_sel2$from) %>% 
+      as_tibble() %>% 
+      distinct() %>% 
+      rename(id = value)
+    
+    # Get the info for the nodes
+    nodes_sel <- nodes %>% 
+      mutate(id = str_c('d',id) ) %>% 
+      inner_join(sel_nodes)
+    
+  # Set color for nodes
+  node_colors <- readxl::read_xlsx('./scraped_data/table_party_colors.xlsx')
+  myColors <- node_colors$color
+  names(myColors) <- node_colors$party
+  colScale <- scale_colour_manual(name = "party_factor",values = myColors)
   
-# Add quantiles to data
-edges_sel2 <- edges_sel %>% 
-  mutate(quantile = case_when( weight < quantiles[[3]] ~ "sub-p50",
-                               ( weight>= quantiles[[3]] ) &  (weight<quantiles[[4]]) ~ "p50",
-                               weight>= quantiles[[4]] ~ "p75") ) %>% 
-  mutate(quantile = ifelse(type_vote =="Cross coalition","Cross coalition", quantile) ) %>%  
-  mutate(quantile = factor(quantile, levels = c("sub-p50","p50","p75","Cross coalition")))
-
-
-# Nodes to use
-sel_nodes <- c(edges_sel2$to,edges_sel2$from) %>% 
-  as_tibble() %>% 
-  distinct() %>% 
-  rename(id = value)
-
-# Get the info for the nodes
-nodes_sel <- nodes %>% 
-  mutate(id = str_c('d',id) ) %>% 
-  inner_join(sel_nodes)
-
-# Create graph and consolidate pairs (to,from can be inverted from month to month)
-network_graph <- tbl_graph(nodes = nodes_sel,
-                           edges = edges_sel2,
-                           directed = FALSE,
-                           node_key = "id") %>% 
-  activate(edges) %>% 
-  mutate(temp = ifelse(from > to, paste0(to, from), paste0(from, to))) %>% 
-    group_by(temp) %>% 
-    mutate(weight = sum(weight)) %>% 
-    ungroup() %>% 
-    dplyr::distinct(temp, .keep_all = TRUE) %>% 
-    select(-temp)
   
+    # Make party a factor variable
+    party_rank <- node_colors %>% 
+      select(party,rank) %>% 
+      arrange(rank) %>% 
+      mutate(party_factor = as_factor(party))
+    
+    # Nodes el with party
+    nodes_sel2 <- nodes_sel %>% 
+      left_join(party_rank)
+    
+    # Create graph and consolidate pairs (to,from can be inverted from month to month)
+    network_graph <- tbl_graph(nodes = nodes_sel2,
+                               edges = edges_sel2,
+                               directed = FALSE,
+                               node_key = "id")
+    
+    
+  # Create graph viz
+  network_viz <- ggraph(network_graph, layout = "nicely") + 
+      geom_node_point(aes(color = party_factor)) +
+    colScale
+  
+  # Grab legend
+legend <- get_legend(network_viz)
+  
+library(grid)
+library(gridExtra) 
 
-network_graph2 <- network_graph %>% 
-  activate(nodes) %>% 
-  filter(!node_is_isolated()) %>% 
-  mutate(degree  = centrality_degree())
-
-
-
-# Set color for nodes
-node_colors <- readxl::read_xlsx('./scraped_data/table_party_colors.xlsx')
-myColors <- node_colors$color
-names(myColors) <- node_colors$party
-colScale <- scale_colour_manual(name = "party",values = myColors)
-
-
-# Create graph
-ggraph(network_graph2, layout = "fr",weights=weight  ) + 
-    geom_node_point(aes(color = party, size=degree)) +
-    geom_edge_link(aes(color=quantile),alpha=0.08) +
-    #geom_edge_density(aes(fill = weight)) +
-    colScale +
-    scale_edge_colour_manual(values = c('#000000','#4c4c4c','#cccccc','#dc143C') ) +
-    scale_size_continuous(range = c(3,6)) +
-  theme(panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.border = element_blank(),
-    panel.background = element_blank()) 
+grid.newpage()
+grid.draw(legend)
 
 
 
 
 ```
 
+```{r viz sandbox}
+
+ # Select specific year and only edges above median. Create coloring variables
+    edges_sel <- edges %>% 
+      filter(year==2014) %>% 
+  mutate(weight_aux = 1/weight) %>% 
+      filter(weight>median(weight, na.rm = TRUE)) %>% 
+        mutate(to = str_c('d',to),
+             from = str_c('d',from)) %>% 
+        filter(weight>median(weight, na.rm = TRUE))
+    
+    quantiles <- quantile(edges_sel$weight)
+      
+    # Add quantiles to data
+    edges_sel2 <- edges_sel %>% 
+      mutate(quantile = case_when( weight < quantiles[[3]] ~ "sub-p50",
+                                   ( weight>= quantiles[[3]] ) &  (weight<quantiles[[4]]) ~ "p50",
+                                   weight>= quantiles[[4]] ~ "p75") ) %>% 
+      mutate(quantile = factor(quantile, levels = c("sub-p50","p50","p75")))
+    
+    
+    # Nodes to use
+    sel_nodes <- c(edges_sel2$to,edges_sel2$from) %>% 
+      as_tibble() %>% 
+      distinct() %>% 
+      rename(id = value)
+    
+    # Get the info for the nodes
+    nodes_sel <- nodes %>% 
+      mutate(id = str_c('d',id) ) %>% 
+      inner_join(sel_nodes, by ="id")
+    
+    # Create graph and consolidate pairs (to,from can be inverted from month to month)
+    network_graph <- tbl_graph(nodes = nodes_sel,
+                               edges = edges_sel2,
+                               directed = FALSE,
+                               node_key = "id") %>% 
+      activate(edges) %>% 
+      mutate(temp = ifelse(from > to, paste0(to, from), paste0(from, to))) %>% 
+        group_by(temp) %>% 
+        mutate(weight = sum(weight)) %>% 
+        ungroup() %>% 
+        dplyr::distinct(temp, .keep_all = TRUE) %>% 
+        select(-temp)
+      
+    # Take out nodes with no connections, also filter for min of 5 edges per node.
+    network_graph2 <- network_graph %>% 
+      activate(nodes) %>% 
+      filter(!node_is_isolated()) %>% 
+      mutate(degree  = centrality_degree(),
+             between = centrality_betweenness()) %>% 
+      filter(degree>5)
+    
+    # Set color for nodes
+    node_colors <- readxl::read_xlsx('./scraped_data/table_party_colors.xlsx')
+    myColors <- node_colors$color
+    names(myColors) <- node_colors$party
+    colScale <- scale_colour_manual(name = "party",values = myColors)
+    
+    # Layout
+    bb <- layout_as_backbone(network_graph2,keep = 1)
+    # Create graph viz
+    network_viz <- ggraph(network_graph2,x=bb$xy[,1],y=bb$xy[,2]) + 
+        geom_edge_link(aes(color=weight_aux),alpha=0.3) +
+        geom_node_point(aes(color = party, size=between)) +
+        colScale +
+        scale_edge_color_gradient(low = "gray0", high = "grey76") +
+        #scale_edge_colour_manual(values = c('#000000','#4c4c4c','#cccccc') ) +
+        scale_size_continuous(range = c(1,2)) +
+      theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        legend.title = element_blank(),
+        legend.position="none") +
+      ggtitle(2014)
+    
+    # Output
+    network_viz
+  
+  
+
+
+```
+
+
+```{r viz - force directed graph - function}
+
+
+  graph_stress_layout <- function(legislative_year){
+  
+    # Select specific year and only edges above median. Create coloring variables
+    edges_sel <- edges %>% 
+      filter(year==legislative_year) %>% 
+      filter(weight>median(weight, na.rm = TRUE)) %>% 
+        mutate(to = str_c('d',to),
+             from = str_c('d',from)) %>% 
+        filter(weight>median(weight, na.rm = TRUE))
+    
+    quantiles <- quantile(edges_sel$weight)
+      
+    # Add quantiles to data
+    edges_sel2 <- edges_sel %>% 
+      mutate(quantile = case_when( weight < quantiles[[3]] ~ "sub-p50",
+                                   ( weight>= quantiles[[3]] ) &  (weight<quantiles[[4]]) ~ "p50",
+                                   weight>= quantiles[[4]] ~ "p75") ) %>% 
+      mutate(quantile = factor(quantile, levels = c("sub-p50","p50","p75")))
+    
+    
+    # Nodes to use
+    sel_nodes <- c(edges_sel2$to,edges_sel2$from) %>% 
+      as_tibble() %>% 
+      distinct() %>% 
+      rename(id = value)
+    
+    # Get the info for the nodes
+    nodes_sel <- nodes %>% 
+      mutate(id = str_c('d',id) ) %>% 
+      inner_join(sel_nodes, by ="id")
+    
+    # Create graph and consolidate pairs (to,from can be inverted from month to month)
+    network_graph <- tbl_graph(nodes = nodes_sel,
+                               edges = edges_sel2,
+                               directed = FALSE,
+                               node_key = "id") %>% 
+      activate(edges) %>% 
+      mutate(temp = ifelse(from > to, paste0(to, from), paste0(from, to))) %>% 
+        group_by(temp) %>% 
+        mutate(weight = sum(weight)) %>% 
+        ungroup() %>% 
+        dplyr::distinct(temp, .keep_all = TRUE) %>% 
+        select(-temp)
+      
+    # Take out nodes with no connections, also filter for min of 3 edges per node.
+    network_graph2 <- network_graph %>% 
+      activate(nodes) %>% 
+      filter(!node_is_isolated()) %>% 
+      mutate(degree  = centrality_degree(),
+             between = centrality_betweenness()) %>% 
+      filter(degree>5)
+    
+    # Set color for nodes
+    node_colors <- readxl::read_xlsx('./scraped_data/table_party_colors.xlsx')
+    myColors <- node_colors$color
+    names(myColors) <- node_colors$party
+    colScale <- scale_colour_manual(name = "party",values = myColors)
+    
+    # Layout
+    bb <- layout_as_backbone(network_graph2,keep = 1)
+    # Create graph viz
+    network_viz <- ggraph(network_graph2,x=bb$xy[,1],y=bb$xy[,2]) + 
+        geom_edge_link(aes(color=quantile),alpha=0.03) +
+        geom_node_point(aes(color = party, size=between)) +
+        colScale +
+        scale_edge_colour_manual(values = c('#000000','#4c4c4c','#cccccc') ) +
+        scale_size_continuous(range = c(1,2)) +
+      theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        legend.title = element_blank(),
+        legend.position="none") +
+      ggtitle(legislative_year)
+    
+    # Output
+    network_viz
+  
+  }
+  
+
+# Go over all years
+year_vec <- seq(2002,2020)
+
+# Save in list results - parallel
+plan(multisession)
+stress_graphs_allyears <- future_map(year_vec,graph_stress_layout, .options = future_options(seed = TRUE))
+
+```
+
+```{r rotate stress graphs}
+# 2002
+g2002 <- stress_graphs_allyears[[1]] +
+  scale_x_reverse()
+
+# 2003: What happned to it?? -- good now
+g2003 <- stress_graphs_allyears[[2]] +
+  scale_x_reverse()
+
+# 2004
+g2004 <- stress_graphs_allyears[[3]]
+
+# 2005
+g2005 <- stress_graphs_allyears[[4]]
+
+# 2006
+g2006 <- stress_graphs_allyears[[5]] 
+
+# 2007
+g2007 <-stress_graphs_allyears[[6]] +
+        scale_x_reverse()
+
+# 2008
+g2008 <-stress_graphs_allyears[[7]] +
+  scale_x_reverse()
+
+# 2009
+g2009 <-stress_graphs_allyears[[8]] +
+  scale_x_reverse()
+
+# 2010
+g2010 <-stress_graphs_allyears[[9]] +
+  scale_x_reverse()
+
+# 2011
+g2011 <-stress_graphs_allyears[[10]] +
+  scale_x_reverse()
+
+# 2012
+g2012 <-stress_graphs_allyears[[11]] +
+  scale_x_reverse()
+
+# 2013
+g2013 <-stress_graphs_allyears[[12]] +
+  scale_x_reverse()
+
+# 2014
+g2014 <-stress_graphs_allyears[[13]] +
+        scale_x_reverse()
+
+# 2015
+g2015 <-stress_graphs_allyears[[14]] +
+    scale_x_reverse()
+
+# 2016: what happned??
+g2016 <-stress_graphs_allyears[[15]]
+
+# 2017:
+g2017 <-stress_graphs_allyears[[16]] +
+        scale_x_reverse()
+
+# 2018:
+g2018 <-stress_graphs_allyears[[17]]
+
+# 2019:
+g2019 <-stress_graphs_allyears[[18]] +
+          scale_x_reverse()
+
+# 2020:
+g2020 <-stress_graphs_allyears[[19]]
+
+
+```
+
+
+```{r multipage viz}
+library(patchwork)
+
+lagos <- (g2002/g2003/g2004/g2005) +
+  plot_annotation(title = 'Gobierno Ricardo Lagos')
+
+bachelet_1 <- (g2006/g2007/g2008/g2009) +
+  plot_annotation(title = 'Gobierno Michelle Bachelet I')
+
+pinera_1 <- (g2010/g2011/g2012/g2013) +
+  plot_annotation(title = 'Gobierno Sebastian Piñera I')
+
+bachelet_2 <- (g2014/g2015/g2016/g2017) +
+  plot_annotation(title = 'Gobierno Michelle Bachelet II')
+
+pinera_2 <- (g2018/g2019/g2020/g2020) +
+  plot_annotation(title = 'Gobierno Sebastian Piñera II')
+
+# Export the graphs
+ggsave('./final_graphs/lagos.pdf', lagos, width = 10, height = 10, units = "in")
+ggsave('./final_graphs/bachelet_1.pdf', bachelet_1, width = 10, height = 10, units = "in")
+ggsave('./final_graphs/pinera_1.pdf', pinera_1, width = 10, height = 10, units = "in")
+ggsave('./final_graphs/bachelet_2.pdf', bachelet_2, width = 10, height = 10, units = "in")
+ggsave('./final_graphs/pinera_2.pdf', pinera_2, width = 10, height = 10, units = "in")
+
+
+
+
+```

@@ -23,9 +23,14 @@ source('function_grab_voting_details_and_info.R')
 # Parameter is vote_id where the latest can be checked at:
 # https://www.camara.cl/legislacion/sala_sesiones/votaciones.aspx
 
-# 2002-2020
-vote_id_start <- 1200
-vote_id_end <- 36000
+# # 2002-2020
+# vote_id_start <- 1200
+# vote_id_end <- 36000
+
+# Update 12/11/20
+vote_id_start <- 34327
+vote_id_end <- 34652
+
 
 
 # Create tibble of data to store ------------------------------------------

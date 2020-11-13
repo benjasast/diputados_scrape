@@ -12,6 +12,8 @@ library(lubridate)
 
 library(tidygraph)
 library(ggraph)
+library(patchwork)
+
 
 
 
@@ -45,6 +47,21 @@ vote_info <- readRDS('./scraped_data/table_vote_information.rds') %>%
            legislative_semester==2 ~ str_c(legislative_year,'06-01') %>% as_date()
          ) )
 
+
+  # Create an order for parties (factor)
+  node_colors <- readxl::read_xlsx('./scraped_data/table_party_colors.xlsx')
+
+    # Make party a factor variable
+    party_factor <- node_colors %>% 
+      select(party,rank) %>% 
+      arrange(rank) %>% 
+      mutate(party_factor = as_factor(party)) %>% 
+      select(-rank)
+
+# Dates to cut-off graphs
+govt_cuts_vector <- c(as.Date('2005-09-1'),as.Date('2009-09-1'),as.Date('2013-09-1'),as.Date('2017-09-1'))
+
+
 ```
 
 
@@ -56,13 +73,26 @@ summary_rel_coalition_gen <- net_data_ready %>%
   summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
             `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
             `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
-  pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
+  pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value") %>% 
+  mutate(`Concordancia de votos` = factor(var, levels = c("Prop. votan distinto","Prop. alguna abstencion","Prop. votan igual")))
 
-summary_rel_coalition_gen %>% 
-  ggplot(aes(legislative_semester_date,value, fill=var)) +
+fig1 <- summary_rel_coalition_gen %>% 
+  ggplot(aes(legislative_semester_date,value, fill= `Concordancia de votos` )) +
   geom_bar(stat= "identity") +
   #scale_x_continuous(breaks = seq(2002, 2020, by = 2)) +
-  ggtitle("Cuanto votan de acuerdo las parejas de diputados?")
+  ggtitle("Cuanto votan de acuerdo las parejas de diputados?") +
+  scale_x_date(date_breaks = "1 year",date_labels = "%Y" ) +
+  theme(axis.text.x=element_text(angle=45,hjust=1)) +
+  xlab('\nAño legislativo') +
+  ylab('') +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
+
+
+fig1
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig1.png',fig1, width = 10, height = 7)
 
 
 ```
@@ -72,38 +102,66 @@ summary_rel_coalition_gen %>%
 ```{r Promedio votos de acuerdo por coalition-mix}
 
 summary_rel_coalition <- net_data_ready %>% 
-  group_by(legislative_semester_date,rel_coalition) %>% 
+  group_by(legislative_semester_date,rel_coalition,rel_coalition_gen) %>% 
   summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
             `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
             `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
   pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
 
-
-summary_rel_coalition %>% 
+fig2 <- summary_rel_coalition %>% 
   filter(var=="Prop. votan igual") %>% 
   filter(rel_coalition!="Independent present") %>% 
   ggplot(aes(legislative_semester_date,value)) +
   geom_line(aes(color = rel_coalition)) +
   geom_point(aes(color = rel_coalition)) +
   theme(legend.position="bottom") +
-  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
-  ggtitle('Promedio de porcentaje de votos de acuerdo para distintos tipos de pareja')
+  ggtitle('Votos de acuerdo para distintos tipos de pareja') +
+  scale_x_date(date_breaks = "1 year",date_labels= "%Y" ) +
+  theme(axis.text.x=element_text(angle=45,hjust=1)) +
+  facet_wrap(~rel_coalition_gen) +
+  ylab('') + 
+  xlab('\nAño legislativo') +
+  labs(color='Pareja formada por') +
+  scale_y_continuous(limits = c(0.4,1)) +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
 
+
+fig2
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig2.png',fig2, width = 12, height = 7)
+
+
+  
 
 ```
 
 ```{r promedio porcentaje desacuerdo por coalition-mix}
 
-summary_rel_coalition %>% 
+fig3 <- summary_rel_coalition %>% 
   filter(var=="Prop. votan distinto") %>% 
   filter(rel_coalition!="Independent present") %>% 
   ggplot(aes(legislative_semester_date,value)) +
   geom_line(aes(color = rel_coalition)) +
   geom_point(aes(color = rel_coalition)) +
   theme(legend.position="bottom") +
-  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
-  ggtitle('Promedio de porcentaje de votos en desacuerdo para distintos tipos de pareja')
+  ggtitle('Votos en desacuerdo para distintos tipos de pareja') +
+  scale_x_date(date_breaks = "1 year",date_labels= "%Y" ) +
+  theme(axis.text.x=element_text(angle=45,hjust=1)) +
+  facet_wrap(~rel_coalition_gen) +
+  ylab('') + 
+  xlab('\nAño legislativo') +
+  labs(color='Pareja formada por') +
+  scale_y_continuous(limits = c(0,0.5)) +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
 
+
+fig3
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig3.png',fig3, width = 12, height = 7)
 
 
 ```
@@ -112,9 +170,8 @@ summary_rel_coalition %>%
 ```{r numero de votaciones aprobadas/no aprobadas por quorum}
 
 vote_info_custom <- vote_info %>% 
-  mutate(quorum_agg = case_when(quorum %in% c('QUORUM CALIFICADO','QUORUM SIMPLE') ~ quorum,
-                                quorum %in% c('LEY ORGANICA CONSTITUCIONAL','REFORMA CONSTITUCIONAL 2/3','REFORMA CONSTITUCIONAL 3/5') ~ 'LOC o REFORMAS CONSTITUCIONALES' ,
-                                quorum %in% c('1/3','2/3 PRESENTES','3/5') ~ 'OTRO' )  ) %>% 
+  mutate(quorum_agg = case_when(quorum %in% c('QUORUM SIMPLE') ~ quorum,
+                                quorum %in% c('QUORUM CALIFICADO','LEY ORGANICA CONSTITUCIONAL','REFORMA CONSTITUCIONAL 2/3','REFORMA CONSTITUCIONAL 3/5','1/3','2/3 PRESENTES','3/5') ~ 'QUORUM SUPERIOR' )) %>% 
   mutate_at(vars(starts_with("total")),~as.double(.)) %>% 
   mutate(vote_apruebo = case_when(quorum=="QUORUM SIMPLE" & total_afir>total_neg ~ 1,
     quorum=="QUORUM CALIFICADO" & total_afir>120*(1/2) ~ 1,
@@ -127,57 +184,134 @@ vote_info_custom <- vote_info %>%
   mutate(vote_apruebo = ifelse(is.na(vote_apruebo),0,1))
 
 
+# Summary percentage
 summary_votes <- vote_info_custom %>% 
   filter(quorum_agg!="OTRO") %>% 
   group_by(quorum_agg,legislative_semester_date) %>% 
   summarise(per_aprobado = mean(vote_apruebo, na.rm = TRUE))
 
 
-summary_votes %>% 
+fig4a <- summary_votes %>% 
   ggplot(aes(legislative_semester_date,per_aprobado)) +
-  geom_line(aes(color=quorum_agg)) +
-  geom_point(aes(color=quorum_agg)) +
+  geom_line() +
+  geom_point() +
   theme(legend.position="bottom") +
-  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
   facet_wrap(~quorum_agg) +
-  ggtitle('Proporcion votaciones aprobadas por año y quorum') 
+  ggtitle('Votaciones aprobadas por año y quorum') +
+  theme(legend.position="bottom") +
+  scale_x_date(date_breaks = "1 year",date_labels= "%Y" ) +
+  theme(axis.text.x=element_text(angle=45,hjust=1)) +
+  xlab('\nAño legislativo') +
+  labs(color='Tipo de quorum') +
+  ylab('Proporción') +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
 
+
+# Summary total number
+summary_votesb <- vote_info_custom %>% 
+    filter(quorum_agg!="OTRO") %>% 
+    group_by(quorum_agg,legislative_semester_date) %>% 
+  summarise(`Votaciones aprobadas` = sum(vote_apruebo, na.rm = TRUE),
+            `N. Votaciones` = n()) %>% 
+  pivot_longer(c("Votaciones aprobadas","N. Votaciones"))
+
+
+fig4b <- summary_votesb %>% 
+  ggplot(aes(legislative_semester_date,value)) +
+  geom_line(aes(color=name)) +
+  geom_point(aes(color=name)) +
+  theme(legend.position="bottom") +
+  facet_wrap(~quorum_agg) +
+  ggtitle('Votaciones aprobadas por año y quorum') +
+  theme(legend.position="bottom") +
+  scale_x_date(date_breaks = "1 year",date_labels= "%Y" ) +
+  theme(axis.text.x=element_text(angle=45,hjust=1)) +
+  ylab('N') + 
+  xlab('\nAño legislativo') +
+  labs(color='') +
+  labs(caption = '*Las votaciones de quorum superior incluyen las categorías de: quorum calificado, \nreformas constitucionales (2/3 o 3/5), leyes organicas constitucionales, entre otras.') +
+  theme(plot.caption = element_text(hjust = 0.4)) +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
+
+
+fig4 <- fig4a/fig4b
+fig4
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig4.png',fig4, width = 12, height = 14)
 
 ```
 
 
 ```{r porcentaje_votos_acuerdo_same_party_pairs}
 
+# Put party as factor too
 summary_rel_same_party <- net_data_ready %>% 
   filter(party1==party2) %>% 
   filter(party1!='Independientes') %>% 
   group_by(legislative_semester_date,party1,party2) %>% 
   summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
+            `Desviación estándar` = sd(n_same_bothpresent , na.rm = TRUE),
             `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
+            SD = sd(n_opposite_bothpresent, na.rm = TRUE),
             `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
-  pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
+  pivot_longer(   cols = c(starts_with("Prop"),"Desviación estándar","SD") ,    names_to = "var", values_to = "value") %>% 
+  left_join(party_factor, by = c("party1" = "party"))
 
-summary_rel_same_party %>% 
-  filter(var=="Prop. votan igual") %>% 
+
+fig5 <- summary_rel_same_party %>% 
+  filter(var=="Prop. votan igual" | var=="Desviación estándar") %>% 
   ggplot(aes(legislative_semester_date,value)) +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~party1) +
-  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
-  ggtitle("Prop. votos de acuerdo para parejas del mismo partido")
+  geom_line(aes(color=var)) +
+  geom_point(aes(color=var)) +
+  facet_wrap(~party_factor) +
+  ggtitle("Votos de acuerdo para parejas del mismo partido") +
+  scale_x_date(date_breaks = "1 year",date_labels= "%Y" ) +
+  theme(axis.text.x=element_text(angle=90,hjust=1,size=5)) +
+  ylab('Proporción') + 
+  xlab('\nAño legislativo') +
+  theme(legend.position="bottom") +
+  labs(color = '') +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
+
+
+fig5
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig5.png',fig5, width = 12, height = 21)
+
+  
   
 ```
 
 ```{r prop votos desacuerdo mismo partido}
 
-summary_rel_same_party %>% 
-  filter(var=="Prop. votan distinto") %>% 
+fig6 <- summary_rel_same_party %>% 
+  filter(var=="Prop. votan distinto" | var=="SD") %>% 
+  mutate(var = ifelse(var=="SD","Desviación estándar",var)) %>% 
   ggplot(aes(legislative_semester_date,value)) +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~party1) +
-  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
-  ggtitle("Prop. votos desacuerdo para parejas del mismo partido")
+  geom_line(aes(color=var)) +
+  geom_point(aes(color=var)) +
+  facet_wrap(~party_factor) +
+  ggtitle("Votos en desacuerdo para parejas del mismo partido") +
+  scale_x_date(date_breaks = "1 year",date_labels= "%Y" ) +
+  theme(axis.text.x=element_text(angle=90,hjust=1,size=5)) +
+  ylab('Proporción') + 
+  xlab('\nAño legislativo') +
+  theme(legend.position="bottom") +
+  labs(color = '') +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
+
+fig6
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig6.png',fig6, width = 12, height = 21)
+
+
 
 ```
 
@@ -187,20 +321,35 @@ summary_rel_same_party %>%
 summary_rel_inter <- net_data_ready %>% 
   filter(!is.na(rel_party)) %>% 
   group_by(legislative_semester_date,rel_party) %>% 
-  summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
+ summarise(`Prop. votan igual` = mean(n_same_bothpresent, na.rm = TRUE),
+            `Desviación estándar` = sd(n_same_bothpresent , na.rm = TRUE),
             `Prop. votan distinto` = mean(n_opposite_bothpresent, na.rm = TRUE),
+            SD = sd(n_opposite_bothpresent, na.rm = TRUE),
             `Prop. alguna abstencion` = mean(n_abst_bothpresent, na.rm = TRUE)) %>% 
-  pivot_longer(   cols = starts_with("Prop"),    names_to = "var", values_to = "value")
+  pivot_longer(   cols = c(starts_with("Prop"),"Desviación estándar","SD") ,    names_to = "var", values_to = "value")
 
-summary_rel_inter %>% 
-  filter(var=="Prop. votan igual") %>% 
+fig7 <- summary_rel_inter %>% 
+  filter(var=="Prop. votan igual" | var=="Desviación estándar") %>% 
   filter(rel_party!="Same Party") %>% 
   ggplot(aes(legislative_semester_date,value)) +
-  geom_line() +
-  geom_point() +
+  geom_line(aes(color=var)) +
+  geom_point(aes(color=var)) +
   facet_wrap(~rel_party) +
-  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
-  ggtitle("Prop. votos de acuerdo para parejas Inter-coalición")
+  ggtitle("Votos de acuerdo para parejas Inter-coalición") +
+  scale_x_date(date_breaks = "1 year",date_labels= "%Y" ) +
+  theme(axis.text.x=element_text(angle=90,hjust=1,size=5)) +
+  ylab('Proporción') + 
+  xlab('\nAño legislativo') +
+  theme(legend.position="bottom") +
+  labs(color = '') +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
+
+fig7
+
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig7.png',fig7, width = 12, height = 7)
 
 
 ```
@@ -208,15 +357,28 @@ summary_rel_inter %>%
 
 ```{r Prop. votos en desacuerdo para parejas inter-coalicion}
 
-summary_rel_inter %>% 
-  filter(var=="Prop. votan distinto") %>% 
+fig8 <- summary_rel_inter %>% 
+  filter(var=="Prop. votan distinto" | var=="SD") %>% 
   filter(rel_party!="Same Party") %>% 
+  mutate(var = ifelse(var=="SD","Desviación estándar",var)) %>% 
   ggplot(aes(legislative_semester_date,value)) +
-  geom_line() +
-  geom_point() +
+  geom_line(aes(color=var)) +
+  geom_point(aes(color=var)) +
   facet_wrap(~rel_party) +
-  #scale_x_continuous(breaks = seq(2002, 2020, by = 4)) +
-  ggtitle("Prop. votos desacuerdo para parejas Inter-coalición")
+  ggtitle("Votos en desacuerdo para parejas Inter-coalición") +
+  scale_x_date(date_breaks = "1 year",date_labels= "%Y" ) +
+  theme(axis.text.x=element_text(angle=90,hjust=1,size=5)) +
+  ylab('Proporción') + 
+  xlab('\nAño legislativo') +
+  theme(legend.position="bottom") +
+  labs(color = '') +
+  geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
+                color = "black", size=0.8, alpha=.3)
+
+fig8
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig8.png',fig8, width = 12, height = 7)
 
 
 
