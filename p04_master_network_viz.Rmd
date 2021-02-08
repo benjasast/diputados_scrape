@@ -23,7 +23,13 @@ rm(list=ls())
 set.seed(123)
 
 # Load data
-net_data <- readRDS('table_network_by_year_month.rds')
+net_data_pre <- readRDS('./scraped_data/table_network_by_year_month.rds')
+net_data_2021 <- readRDS('./scraped_data/table_network_by_year_month_2021rerun.rds')
+
+# Put all data and re-run together
+net_data  <- net_data_pre %>% 
+  union_all(net_data_2021)
+
 
 # Get data ready
 net_data_ready <- net_data %>% 
@@ -34,7 +40,8 @@ net_data_ready <- net_data %>%
          legislative_semester_date = case_when(
            legislative_semester==1 ~ str_c(legislative_year,'01-01') %>% as_date(),
            legislative_semester==2 ~ str_c(legislative_year,'06-01') %>% as_date()
-         ) )
+         ) ) %>% 
+  ungroup()
 
 
 # Nodes
@@ -48,6 +55,7 @@ nodes <- readRDS('./scraped_data/political_affiliation_wtime.rds') %>%
   transmute(id = diputado_id,
          party = party,
          year = legislative_year)
+
 
 
 # Convert to yearly information - monthly currently
@@ -69,6 +77,8 @@ edges <- net_data_ready %>%
          type_vote = rel_coalition_gen)
 
 
+
+
 ```
 
 
@@ -76,9 +86,9 @@ edges <- net_data_ready %>%
 ```{r grab legend}
 
  # Select specific year and only edges above median. Create coloring variables
-    edges_sel <- edges %>% 
-        mutate(to = str_c('d',to),
-             from = str_c('d',from))
+    edges_sel <- edges 
+        #mutate(to = str_c('d',to),
+         #    from = str_c('d',from))
 
     # Add quantiles to data
     edges_sel2 <- edges_sel
@@ -91,7 +101,7 @@ edges <- net_data_ready %>%
     
     # Get the info for the nodes
     nodes_sel <- nodes %>% 
-      mutate(id = str_c('d',id) ) %>% 
+      #mutate(id = str_c('d',id) ) %>% 
       inner_join(sel_nodes)
     
   # Set color for nodes
@@ -109,8 +119,10 @@ edges <- net_data_ready %>%
     
     # Nodes el with party
     nodes_sel2 <- nodes_sel %>% 
-      left_join(party_rank)
+      left_join(party_rank) %>% 
+      rename(Partido = party_factor)
     
+
     # Create graph and consolidate pairs (to,from can be inverted from month to month)
     network_graph <- tbl_graph(nodes = nodes_sel2,
                                edges = edges_sel2,
@@ -120,7 +132,7 @@ edges <- net_data_ready %>%
     
   # Create graph viz
   network_viz <- ggraph(network_graph, layout = "nicely") + 
-      geom_node_point(aes(color = party_factor)) +
+      geom_node_point(aes(color = Partido)) +
     colScale
   
   # Grab legend
@@ -141,18 +153,13 @@ grid.draw(legend)
 
  # Select specific year and only edges above median. Create coloring variables
     edges_sel <- edges %>% 
-      filter(year==2019) %>% 
+      filter(year==2010) %>% 
   mutate(weight_aux = 1/weight) %>% 
       filter(weight>median(weight, na.rm = TRUE)) %>% 
         mutate(to = str_c('d',to),
-             from = str_c('d',from)) %>% 
+            from = str_c('d',from)) %>% 
         filter(weight>median(weight, na.rm = TRUE))
-    
-    quantiles <- quantile(edges_sel$weight)
-      
-    # Add quantiles to data
-    edges_sel2 <- edges_sel
-    
+
     # Nodes to use
     sel_nodes <- c(edges_sel2$to,edges_sel2$from) %>% 
       as_tibble() %>% 
@@ -162,8 +169,17 @@ grid.draw(legend)
     # Get the info for the nodes
     nodes_sel <- nodes %>% 
       mutate(id = str_c('d',id) ) %>% 
-      inner_join(sel_nodes, by ="id")
+      inner_join(sel_nodes, by ="id") %>% 
+      filter(party %in% c('Partido Demócrata Cristiano','Renovación Nacional'))
     
+    # Add quantiles to data
+    edges_sel2 <- edges_sel %>% 
+      filter(to %in% nodes_sel$iid) %>% 
+      filter(from %in% nodes_sel$id)
+    
+    
+    
+
     # Create graph and consolidate pairs (to,from can be inverted from month to month)
     network_graph <- tbl_graph(nodes = nodes_sel,
                                edges = edges_sel2,
@@ -197,23 +213,25 @@ grid.draw(legend)
     network_viz <- ggraph(network_graph2,x=bb$xy[,1],y=bb$xy[,2]) + 
         geom_edge_link0(aes(color=weight, alpha= weight)) +
         geom_node_point(aes(color = party, size=between)) +
-        colScale +
+        #colScale +
         scale_edge_color_gradient(low = "gray76", high = "grey0") +
         scale_edge_size_manual(values = c(0.008)) +
-        scale_edge_alpha(range = c(.1, .3)) +
+        scale_edge_alpha(range = c(.1, 1)) +
         scale_size_continuous(range = c(1,2)) +
       theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.border = element_blank(),
-        panel.background = element_blank(),
-        legend.title = element_blank(),
-        legend.position="none") +
-      ggtitle(2019)
+        panel.background = element_blank() ) +
+        #legend.title = element_blank(),
+        #legend.position="none") +
+      ggtitle(2010)
     
     # Output
     network_viz
   
-  
+    edges_sel2
+    
+
 
 
 ```
@@ -229,19 +247,14 @@ grid.draw(legend)
       filter(year==legislative_year) %>% 
       filter(weight>median(weight, na.rm = TRUE)) %>% 
         mutate(weight_aux = 1/weight) %>% 
-        mutate(to = str_c('d',to),
-             from = str_c('d',from)) %>% 
+        #mutate(to = str_c('d',to),
+        #     from = str_c('d',from)) %>% 
         filter(weight>median(weight, na.rm = TRUE))
     
     quantiles <- quantile(edges_sel$weight)
       
     # Add quantiles to data
-    edges_sel2 <- edges_sel #%>% 
-      # mutate(quantile = case_when( weight < quantiles[[3]] ~ "sub-p50",
-      #                              ( weight>= quantiles[[3]] ) &  (weight<quantiles[[4]]) ~ "p50",
-      #                              weight>= quantiles[[4]] ~ "p75") ) %>% 
-      # mutate(quantile = factor(quantile, levels = c("sub-p50","p50","p75")))
-      # 
+    edges_sel2 <- edges_sel
     
     # Nodes to use
     sel_nodes <- c(edges_sel2$to,edges_sel2$from) %>% 
@@ -251,7 +264,7 @@ grid.draw(legend)
     
     # Get the info for the nodes
     nodes_sel <- nodes %>% 
-      mutate(id = str_c('d',id) ) %>% 
+      #mutate(id = str_c('d',id) ) %>% 
       inner_join(sel_nodes, by ="id")
     
     # Create graph and consolidate pairs (to,from can be inverted from month to month)
@@ -285,11 +298,12 @@ grid.draw(legend)
     bb <- layout_as_backbone(network_graph2,keep = 1)
     # Create graph viz
     network_viz <- ggraph(network_graph2,x=bb$xy[,1],y=bb$xy[,2]) + 
-        geom_edge_link(aes(color=weight_aux),alpha=0.08) +
+        geom_edge_link0(aes(color=weight, alpha= weight)) +
         geom_node_point(aes(color = party, size=between)) +
         colScale +
-        scale_edge_color_gradient(low = "gray0", high = "grey82") +
-        #scale_edge_colour_manual(values = c('#000000','#4c4c4c','#cccccc') ) +
+        scale_edge_color_gradient(low = "gray76", high = "grey0") +
+        scale_edge_size_manual(values = c(0.008)) +
+        scale_edge_alpha(range = c(.1, .3)) +
         scale_size_continuous(range = c(1,2)) +
       theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -329,7 +343,8 @@ g2003 <- stress_graphs_allyears[[2]] +
 g2004 <- stress_graphs_allyears[[3]]
 
 # 2005
-g2005 <- stress_graphs_allyears[[4]]
+g2005 <- stress_graphs_allyears[[4]] +
+  scale_x_reverse()
 
 # 2006
 g2006 <- stress_graphs_allyears[[5]] 
@@ -339,12 +354,10 @@ g2007 <-stress_graphs_allyears[[6]] +
         scale_x_reverse()
 
 # 2008
-g2008 <-stress_graphs_allyears[[7]] +
-  scale_x_reverse()
+g2008 <-stress_graphs_allyears[[7]] 
 
 # 2009
-g2009 <-stress_graphs_allyears[[8]] +
-  scale_x_reverse()
+g2009 <-stress_graphs_allyears[[8]] 
 
 # 2010
 g2010 <-stress_graphs_allyears[[9]] +
@@ -381,8 +394,7 @@ g2017 <-stress_graphs_allyears[[16]] +
 g2018 <-stress_graphs_allyears[[17]]
 
 # 2019:
-g2019 <-stress_graphs_allyears[[18]] +
-          scale_x_reverse()
+g2019 <-stress_graphs_allyears[[18]]
 
 # 2020:
 g2020 <-stress_graphs_allyears[[19]]
@@ -410,12 +422,11 @@ pinera_2 <- (g2018/g2019/g2020/g2020) +
   plot_annotation(title = 'Gobierno Sebastian Piñera II')
 
 # Export the graphs
-ggsave('./final_graphs/lagos.pdf', lagos, width = 10, height = 10, units = "in")
-ggsave('./final_graphs/bachelet_1.pdf', bachelet_1, width = 10, height = 10, units = "in")
-ggsave('./final_graphs/pinera_1.pdf', pinera_1, width = 10, height = 10, units = "in")
-ggsave('./final_graphs/bachelet_2.pdf', bachelet_2, width = 10, height = 10, units = "in")
-ggsave('./final_graphs/pinera_2.pdf', pinera_2, width = 10, height = 10, units = "in")
-
+ggsave('./final_graphs/lagos.pdf', lagos, width = 16, height = 14, units = "in")
+ggsave('./final_graphs/bachelet_1.pdf', bachelet_1, width = 12, height = 14, units = "in")
+ggsave('./final_graphs/pinera_1.pdf', pinera_1, width = 12, height = 14, units = "in")
+ggsave('./final_graphs/bachelet_2.pdf', bachelet_2, width = 12, height = 14, units = "in")
+ggsave('./final_graphs/pinera_2.pdf', pinera_2, width = 12, height = 14, units = "in")
 
 
 

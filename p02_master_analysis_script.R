@@ -65,6 +65,7 @@ vote_information_splitready <- fuzzy_date_match %>%
          month = month(fecha)) %>% 
   select(vote_id,fecha,year,month,tipo_codigo,resultado,quorum,boletin,tramite,informe,starts_with("total"),articulo,sesion,legislative_period_id,legislative_name,legislative_name)
 
+
 # Time-splitting: or variable splitting -----------------------------------
 
 # nest by year-month
@@ -73,7 +74,6 @@ vote_information_nested <- vote_information_splitready %>%
   group_by(legislative_name,year_month) %>% 
   nest()
 
-vote_information_nested
 
 # Use split votes on voting details to grab votes correspinding -----------------------------
 
@@ -97,11 +97,24 @@ results <- vote_information_nested_wdetails %>%
 # Save results of all year_months
 saveRDS(results,'./scraped_data/network_all_year_months.rds')
 
+# Re-run for Jan 2021 only
+results_2021 <- vote_information_nested_wdetails %>% 
+  filter(year(year_month)==2021) %>% 
+  mutate(count_result = map(vote_details,calculate_votingpatterns))
+
+# Save results of all year_months
+saveRDS(results_2021,'./scraped_data/network_all_year_months_2021.rds')
+
 
 # Create network data -----------------------------------------------------
 
 # Simply take the counts from results
 network_data <- results %>% 
+  select(-data,-vote_details) %>% 
+  unnest(c(count_result))
+
+# Re-run 2021
+network_data_2021 <- results_2021 %>% 
   select(-data,-vote_details) %>% 
   unnest(c(count_result))
 
@@ -114,6 +127,14 @@ political_affiliation_party <- political_affiliation %>%
 
 # Join political affiliation to network data
 network_data_waffiliation <- network_data %>% 
+  mutate_at(vars(dip_1,dip_2),as.double) %>% 
+  left_join(political_affiliation_party, by = c("dip_1"="diputado_id","year_month"="date")) %>%  # diptuado 1
+  rename(party1 = party) %>% 
+  left_join(political_affiliation_party, by = c("dip_2"="diputado_id","year_month"="date")) %>%   # diptuado 2
+  rename(party2 = party)
+
+# Re-run 2021
+network_data_waffiliation_2021 <- network_data_2021 %>% 
   mutate_at(vars(dip_1,dip_2),as.double) %>% 
   left_join(political_affiliation_party, by = c("dip_1"="diputado_id","year_month"="date")) %>%  # diptuado 1
   rename(party1 = party) %>% 
@@ -134,10 +155,24 @@ network_data_wpairmembership <- network_data_waffiliation %>%
          coalition2 = ifelse(!is.na(coalition2.x),coalition2.x,coalition2.y)) %>% 
   select(-ends_with(".y"),-ends_with(".x"))
 
+# Re-run 2021
+network_data_wpairmembership_2021 <- network_data_waffiliation_2021 %>% 
+  left_join(pair_membership, by = c("party1" = "party1", "party2" = "party2")) %>% # first run
+  left_join(pair_membership, by = c("party2" = "party1", "party1" = "party2")) %>%  # second run
+  mutate(rel_party = ifelse(!is.na(rel_party.x),rel_party.x,rel_party.y),
+         rel_coalition_gen = ifelse(!is.na(rel_coalition_gen.x),rel_coalition_gen.x,rel_coalition_gen.y),
+         rel_coalition = ifelse(!is.na(rel_coalition.x),rel_coalition.x,rel_coalition.y),
+         coalition1 = ifelse(!is.na(coalition1.x),coalition1.x,coalition1.y),
+         coalition2 = ifelse(!is.na(coalition2.x),coalition2.x,coalition2.y)) %>% 
+  select(-ends_with(".y"),-ends_with(".x"))
+
+
 
 # Export network data by year_month ---------------------------------------------
 
-saveRDS(network_data_wpairmembership,'table_network_by_year_month.rds')
+saveRDS(network_data_wpairmembership,'./scraped_data/table_network_by_year_month.rds')
+
+saveRDS(network_data_wpairmembership_2021,'./scraped_data/table_network_by_year_month_2021rerun.rds')
 
 
 

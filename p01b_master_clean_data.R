@@ -28,12 +28,14 @@ rm(list=ls())
 vote_details_02_20 <- readRDS('./scraped_data/vote_info_02_18.rds')
 vote_details_18_20 <- readRDS('./scraped_data/vote_info_18_20.rds')
 vote_details_extra_20 <- readRDS('./scraped_data/votacion_detalle_34327_34652.rds')
+vote_details_extra_20_2 <- readRDS('./scraped_data/votacion_detalle_34653_35371.rds')
 
 
 # Put all votacion detalle together
 vote_details <- vote_details_02_20 %>% 
   union_all(vote_details_18_20) %>% 
-  union_all(vote_details_extra_20)
+  union_all(vote_details_extra_20) %>% 
+  union_all(vote_details_extra_20_2)
 
 
 # Extract vote information ------------------------------------------------
@@ -110,39 +112,40 @@ political_affiliation <- readRDS('./scraped_data/political_affiliation.rds')
 vote_detail_table_clean <- readRDS('./scraped_data/table_vote_details_long.rds')
 
 # list with all diputados present in our data
-diputado_id_list <- vote_detail_table_clean %>% 
-  select(diputado_id) %>% 
-  mutate(diputado_id = diputado_id %>% as.double()) %>% 
+diputado_id_list <- vote_detail_table_clean %>%
+  select(diputado_id) %>%
+  mutate(diputado_id = diputado_id %>% as.double()) %>%
   distinct()
 
 
 # Check they all have information - and pivot wider
-political_affiliation_raw <- political_affiliation %>% 
-  rename(diputado_id = DIPID)  %>% 
-  inner_join(diputado_id_list) %>% 
-  select(-regex) %>% 
+political_affiliation_raw <- political_affiliation %>%
+  rename(diputado_id = DIPID)  %>%
+  inner_join(diputado_id_list) %>%
+  select(-regex) %>%
   pivot_wider(names_from = variable, values_from = value)
 
-no_party <- political_affiliation_raw %>% 
+no_party <- political_affiliation_raw %>%
   filter(str_length(party)==0)
 
 # Get input for diputados without web info (object party_input created)
 source('political_affiliation_input.R')
 
 # put information for all diputados
-political_affiliation <- political_affiliation_raw %>% 
-  anti_join(no_party, by = "diputado_id") %>% 
-  union_all(party_input) %>% 
+political_affiliation <- political_affiliation_raw %>%
+  anti_join(no_party, by = "diputado_id") %>%
+  union_all(party_input) %>%
   mutate(aux = 1)
 
 # Create a time grid: MONTH-YEAR
 time_grid <- seq.Date('2002-01-01' %>% as.Date(),'2020-12-01' %>% as.Date(), by = "month")
-time_df <- tibble(date = time_grid) %>% 
+time_df <- tibble(date = time_grid) %>%
   mutate(aux=1)
 
 # Make a cross join
-political_affiliation_wtime <- political_affiliation %>% 
+political_affiliation_wtime <- political_affiliation %>%
   full_join(time_df, by = "aux")
+
 
 # Prepare corrections for party switches -------------------------------------
 
@@ -272,11 +275,12 @@ party_pairs <- combn(party_list$party1,2) %>%
 
 # Include coalition information
 party_pairs_wcoalition <- party_pairs %>% 
-  left_join(political_coalitions_p9, by = c("party1" = "party") ) %>% 
+  left_join(political_coalitions, by = c("party1" = "party") ) %>% 
   rename(coalition1 = coalition) %>% 
-  left_join(political_coalitions_p9, by = c("party2" = "party") ) %>% 
+  left_join(political_coalitions, by = c("party2" = "party") ) %>% 
   rename(coalition2 = coalition)
-  
+
+
 # Relationship 1: inter-coalition or sampe party
 party_pairs_rel1 <- party_pairs_wcoalition %>% 
   mutate(rel_party = case_when ( (party1==party2) & (party1!=ind) ~ 'Same Party',

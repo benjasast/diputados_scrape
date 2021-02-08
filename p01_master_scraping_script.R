@@ -28,8 +28,12 @@ source('function_grab_voting_details_and_info.R')
 # vote_id_end <- 36000
 
 # Update 12/11/20
-vote_id_start <- 34327
-vote_id_end <- 34652
+# vote_id_start <- 34327
+# vote_id_end <- 34652
+
+# Update 03/02/21
+vote_id_start <- 34653
+vote_id_end <- 35371
 
 
 
@@ -79,7 +83,8 @@ list_dip_ids <- diputados_personal_info %>%
   as_tibble()
 
 # Grab information
-political_affiliation <- map(list_dip_ids$DIPID,grab_political_affiliation)
+political_affiliation <- future_map(list_dip_ids$DIPID,grab_political_affiliation, .progress = TRUE)
+
 
 # Put results together
 political_affiliation_all <- political_affiliation %>% 
@@ -110,7 +115,7 @@ legislative_periods_clean <- legislative_periods_raw %>%
 
 # Add current legislative period
 legislative_periods_clean2<- legislative_periods_clean %>% 
-  rbind(c(9,"2018-03-11",'2020-12-31',"2018-2020"))
+  rbind(c(9,"2018-03-11",'2021-02-27',"2018-2020"))
 
 # Save legislative periods
 saveRDS(legislative_periods_clean2,'./scraped_data/table_legislative_periods_info.rds')

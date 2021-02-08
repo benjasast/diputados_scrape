@@ -15,13 +15,16 @@ library(ggraph)
 library(patchwork)
 
 
-
-
 # remove objects
 rm(list=ls())
 
 # Load data
-net_data <- readRDS('table_network_by_year_month.rds')
+net_data_pre <- readRDS('./scraped_data/table_network_by_year_month.rds')
+net_data_2021 <- readRDS('./scraped_data/table_network_by_year_month_2021rerun.rds')
+
+# Put all data and re-run together
+net_data  <- net_data_pre %>% 
+  union_all(net_data_2021)
 
 # Get data ready
 net_data_ready <- net_data %>% 
@@ -57,10 +60,10 @@ vote_info <- readRDS('./scraped_data/table_vote_information.rds') %>%
       arrange(rank) %>% 
       mutate(party_factor = as_factor(party)) %>% 
       select(-rank)
+    
 
 # Dates to cut-off graphs
 govt_cuts_vector <- c(as.Date('2005-09-1'),as.Date('2009-09-1'),as.Date('2013-09-1'),as.Date('2017-09-1'))
-
 
 ```
 
@@ -86,10 +89,15 @@ fig1 <- summary_rel_coalition_gen %>%
   xlab('\nAño legislativo') +
   ylab('') +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+  annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2018-10-1'), xmax=as.Date('2020-09-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black")
+
 
 
 fig1
+
+
 
 # Save in dropbox
 ggsave('~/Dropbox/COOPERACION/Graficos/fig1.png',fig1, width = 10, height = 7)
@@ -124,10 +132,13 @@ fig2 <- summary_rel_coalition %>%
   labs(color='Pareja formada por') +
   scale_y_continuous(limits = c(0.4,1)) +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+  annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0.4, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2017-10-1'), xmax=as.Date('2021-01-01'), ymin=0.4, ymax=Inf, alpha=0.3, fill="black")
 
 
 fig2
+
 
 # Save in dropbox
 ggsave('~/Dropbox/COOPERACION/Graficos/fig2.png',fig2, width = 12, height = 7)
@@ -155,7 +166,10 @@ fig3 <- summary_rel_coalition %>%
   labs(color='Pareja formada por') +
   scale_y_continuous(limits = c(0,0.5)) +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+    annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2017-10-1'), xmax=as.Date('2021-01-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black")
+
 
 
 fig3
@@ -205,7 +219,10 @@ fig4a <- summary_votes %>%
   labs(color='Tipo de quorum') +
   ylab('Proporción') +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+  annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0.5, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2017-10-1'), xmax=as.Date('2021-01-01'), ymin=0.5, ymax=Inf, alpha=0.3, fill="black")
+
 
 
 # Summary total number
@@ -233,11 +250,15 @@ fig4b <- summary_votesb %>%
   labs(caption = '*Las votaciones de quorum superior incluyen las categorías de: quorum calificado, \nreformas constitucionales (2/3 o 3/5), leyes organicas constitucionales, entre otras.') +
   theme(plot.caption = element_text(hjust = 0.4)) +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+  annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2017-10-1'), xmax=as.Date('2021-01-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black")
+
 
 
 fig4 <- fig4a/fig4b
 fig4
+
 
 # Save in dropbox
 ggsave('~/Dropbox/COOPERACION/Graficos/fig4.png',fig4, width = 12, height = 14)
@@ -247,7 +268,7 @@ ggsave('~/Dropbox/COOPERACION/Graficos/fig4.png',fig4, width = 12, height = 14)
 
 ```{r porcentaje_votos_acuerdo_same_party_pairs}
 
-# Put party as factor too
+# Put party as factor too' 
 summary_rel_same_party <- net_data_ready %>% 
   filter(party1==party2) %>% 
   filter(party1!='Independientes') %>% 
@@ -275,7 +296,12 @@ fig5 <- summary_rel_same_party %>%
   theme(legend.position="bottom") +
   labs(color = '') +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+  annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2017-10-1'), xmax=as.Date('2021-01-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black")
+
+
+  
 
 
 fig5
@@ -304,7 +330,11 @@ fig6 <- summary_rel_same_party %>%
   theme(legend.position="bottom") +
   labs(color = '') +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+  annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2017-10-1'), xmax=as.Date('2021-01-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black")
+
+
 
 fig6
 
@@ -343,7 +373,11 @@ fig7 <- summary_rel_inter %>%
   theme(legend.position="bottom") +
   labs(color = '') +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+  annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2017-10-1'), xmax=as.Date('2021-01-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black")
+
+
 
 fig7
 
@@ -373,7 +407,11 @@ fig8 <- summary_rel_inter %>%
   theme(legend.position="bottom") +
   labs(color = '') +
   geom_vline(xintercept = govt_cuts_vector, linetype="dashed", 
-                color = "black", size=0.8, alpha=.3)
+                color = "black", size=0.8, alpha=.3) +
+  annotate("rect", xmin=as.Date('2009-10-1'), xmax=as.Date('2013-09-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black") +
+  annotate("rect", xmin=as.Date('2017-10-1'), xmax=as.Date('2021-01-01'), ymin=0, ymax=Inf, alpha=0.3, fill="black")
+
+
 
 fig8
 
@@ -384,6 +422,16 @@ ggsave('~/Dropbox/COOPERACION/Graficos/fig8.png',fig8, width = 12, height = 7)
 
 ```
 
+```{r combine fig7 and fig8}
+fig7_8 <- fig7/fig8
+
+fig7_8
+
+# Save in dropbox
+ggsave('~/Dropbox/COOPERACION/Graficos/fig7_8.png',fig7_8, width = 12, height = 14)
+
+
+```
 
 
 
